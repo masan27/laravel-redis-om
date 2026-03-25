@@ -271,6 +271,63 @@ class RedisModel
     }
 
     /**
+     * Perform a mass update on multiple keys using a Redis pipeline.
+     * 
+     * @param string $model
+     * @param array $ids
+     * @param array $fields
+     * @return bool
+     */
+    public function massUpdate(string $model, array $ids, array $fields): bool
+    {
+        try {
+            $this->redis()->pipeline(function ($pipe) use ($model, $ids, $fields) {
+                $now = Carbon::now()->toIso8601String();
+                
+                foreach ($ids as $id) {
+                    $key = "{$model}:{$id}";
+                    
+                    // Update each field
+                    foreach ($fields as $field => $val) {
+                        $pipe->command('JSON.SET', [$key, "$.{$field}", json_encode($val)]);
+                    }
+                    
+                    // Always update update_time
+                    $pipe->command('JSON.SET', [$key, '$.update_time', json_encode($now)]);
+                }
+            });
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error("RedisOM massUpdate Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Perform a mass delete on multiple keys using a Redis pipeline.
+     * 
+     * @param string $model
+     * @param array $ids
+     * @return bool
+     */
+    public function massDelete(string $model, array $ids): bool
+    {
+        try {
+            $this->redis()->pipeline(function ($pipe) use ($model, $ids) {
+                foreach ($ids as $id) {
+                    $pipe->del("{$model}:{$id}");
+                }
+            });
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error("RedisOM massDelete Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * CHECK if key exists directly in Redis.
      * 
      * @param string $key Full key tanpa prefix (e.g. 'Model:id')

@@ -87,3 +87,22 @@ $results = RedisOM::query('transactions')
     ->where('status', 'success')
     ->get();
 ```
+
+---
+
+## 6. Mass Update & Delete
+
+You can perform mass operations directly from a query builder. These operations are performed using **Redis Pipelines** and **Auto-Chunking** (1,000 items per batch) for maximum performance and safety.
+
+```php
+// Mass Update
+User::query()
+    ->where('is_active', false)
+    ->where('last_login', '<', now()->subDays(30)->toIso8601String())
+    ->update(['status' => 'archived']);
+
+// Mass Delete
+User::query()
+    ->where('status', 'temporary')
+    ->delete();
+```

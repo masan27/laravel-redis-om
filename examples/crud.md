@@ -64,6 +64,12 @@ User::update('User:1', [
 // Note: update_time is automatically updated on every write.
 ```
 
+### Mass Update (Multi-records)
+Update multiple records matching a query criteria.
+```php
+User::where('role', 'admin')->update(['role' => 'superadmin']);
+```
+
 ---
 
 ## 4. Deleting
@@ -79,6 +85,12 @@ $user->delete();
 User::drop('User:1');
 // OR
 RedisOM::drop('User:1');
+
+### Mass Delete (Multi-records)
+Delete multiple records matching a query criteria.
+```php
+User::where('status', 'banned')->delete();
+```
 ```
 
 ---

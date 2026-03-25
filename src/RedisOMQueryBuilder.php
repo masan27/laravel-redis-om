@@ -429,6 +429,61 @@ class RedisOMQueryBuilder
     }
 
     /**
+     * Execute a mass update on the matching records.
+     * 
+     * @param array $attributes
+     * @return bool
+     */
+    public function update(array $attributes): bool
+    {
+        // 1. Get all matching IDs (only ID field for efficiency)
+        $ids = $this->select('id')->get()->pluck('id')->toArray();
+
+        if (empty($ids)) {
+            return false;
+        }
+
+        // 2. Perform mass update via RedisModel with auto-chunking (1000 per chunk)
+        $chunks = array_chunk($ids, 1000);
+        $success = true;
+
+        foreach ($chunks as $chunk) {
+            if (!$this->service->massUpdate($this->model, $chunk, $attributes)) {
+                $success = false;
+            }
+        }
+
+        return $success;
+    }
+
+    /**
+     * Execute a mass delete on the matching records.
+     * 
+     * @return bool
+     */
+    public function delete(): bool
+    {
+        // 1. Get all matching IDs
+        $ids = $this->select('id')->get()->pluck('id')->toArray();
+
+        if (empty($ids)) {
+            return false;
+        }
+
+        // 2. Perform mass delete via RedisModel with auto-chunking (1000 per chunk)
+        $chunks = array_chunk($ids, 1000);
+        $success = true;
+
+        foreach ($chunks as $chunk) {
+            if (!$this->service->massDelete($this->model, $chunk)) {
+                $success = false;
+            }
+        }
+
+        return $success;
+    }
+
+    /**
      * Get the total count of documents matching the query.
      */
     public function count(): int
