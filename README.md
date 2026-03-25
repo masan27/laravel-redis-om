@@ -1,4 +1,4 @@
-# Sian's Laravel Redis OM
+# Laravel Redis OM
 
 A high-performance Redis Object Mapper (OM) for Laravel, powered by RedisJSON and RediSearch. This library provides an Eloquent-like experience for interacting with Redis, while offloading complex search operations to a high-speed Python backend.
 
