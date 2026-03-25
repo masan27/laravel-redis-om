@@ -264,8 +264,12 @@ class RedisOMQueryBuilder
     {
         $model = new $this->modelClass();
         
-        foreach ($attributes as $key => $value) {
-            $model->{$key} = $value;
+        if (method_exists($model, 'fill')) {
+            $model->fill($attributes);
+        } else {
+            foreach ($attributes as $key => $value) {
+                $model->{$key} = $value;
+            }
         }
 
         return $model;

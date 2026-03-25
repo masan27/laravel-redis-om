@@ -196,6 +196,8 @@ class RedisModel
         try {
             if (is_array($value)) {
                 // Array/object → RedisJSON
+                // Pastikan update_time di atas (audit trail), tapi tetap yang terbaru
+                unset($value['update_time']);
                 $payload = [
                     'update_time' => Carbon::now()->toIso8601String(),
                     ...$value,

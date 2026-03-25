@@ -3,6 +3,7 @@
 namespace Masan27\LaravelRedisOM;
 
 use Illuminate\Support\Str;
+use Carbon\Carbon;
 
 abstract class RedisOM
 {
@@ -65,6 +66,7 @@ abstract class RedisOM
             if ($currentClass !== self::class && $currentClass !== 'Masan27\LaravelRedisOM\RedisOM') {
                 return new static($data);
             }
+            unset($data['update_time']);
             return (object) $data;
         }
 
@@ -101,6 +103,7 @@ abstract class RedisOM
      */
     public function fill(array $attributes): self
     {
+        unset($attributes['update_time']);
         foreach ($attributes as $key => $value) {
             $this->{$key} = $value;
         }
