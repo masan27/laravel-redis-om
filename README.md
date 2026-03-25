@@ -15,10 +15,10 @@ A high-performance Redis Object Mapper (OM) for Laravel, powered by RedisJSON an
 
 This library automatically tracks the last update time for every record stored as an array/object (RedisJSON).
 
-- **`update_time`**: Automatically set to the current ISO8601 timestamp whenever a record is created or updated via `save()`, `create()`, or `update()`.
+- **`updated_time`**: Automatically set to the current ISO8601 timestamp whenever a record is created or updated via `save()`, `create()`, or `update()`.
 
 > [!IMPORTANT]
-> **Reserved Attribute**: Avoid using `update_time` as a custom attribute name in your models or data payloads. This field is reserved for the system's automatic audit trail and will be overwritten on every write operation.
+> **Reserved Attribute**: Avoid using `updated_time` as a custom attribute name in your models or data payloads. This field is reserved for the system's automatic audit trail and will be overwritten on every write operation.
 
 ## Installation
 
