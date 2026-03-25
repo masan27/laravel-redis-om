@@ -168,4 +168,4 @@ To avoid key collisions, it is highly recommended to use a global prefix. Ensure
 
 ## License
 
-The MIT License (MIT).
+Custom Fork-Only License. Please see the [LICENSE](LICENSE) file for more information.

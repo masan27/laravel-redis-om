@@ -3,7 +3,7 @@
     "version": "1.2.0",
     "description": "Laravel Redis OM implementation for Laravel with Direct Redis Access and Python Search Fallback",
     "type": "library",
-    "license": "MIT",
+    "license": "proprietary",
     "autoload": {
         "psr-4": {
             "Masan27\\LaravelRedisOM\\": "src/"
