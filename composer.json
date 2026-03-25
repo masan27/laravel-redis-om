@@ -1,6 +1,6 @@
 {
     "name": "masan27/laravel-redis-om",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "Laravel Redis OM implementation for Laravel with Direct Redis Access and Python Search Fallback",
     "type": "library",
     "license": "proprietary",
