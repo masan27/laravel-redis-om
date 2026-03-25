@@ -81,7 +81,7 @@ $paginated = User::query()->cursorPaginate(15);
 ## 5. Generic Query (No Model required)
 
 ```php
-use Sian\LaravelRedisOM\RedisOM;
+use Masan27\LaravelRedisOM\RedisOM;
 
 $results = RedisOM::query('transactions')
     ->where('status', 'success')

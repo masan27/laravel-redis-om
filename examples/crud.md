@@ -16,7 +16,7 @@ if ($user) {
 
 ### Generic Style
 ```php
-use Sian\LaravelRedisOM\RedisOM;
+use Masan27\LaravelRedisOM\RedisOM;
 
 $data = RedisOM::find('1', 'User'); // Returns (object) array or null
 ```

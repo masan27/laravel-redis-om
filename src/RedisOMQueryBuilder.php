@@ -1,6 +1,6 @@
 <?php
 
-namespace Sian\LaravelRedisOM;
+namespace Masan27\LaravelRedisOM;
 
 use Illuminate\Support\Collection;
 use Illuminate\Pagination\Paginator;

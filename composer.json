@@ -1,12 +1,12 @@
 {
     "name": "masan27/laravel-redis-om",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Laravel Redis OM implementation for Laravel with Direct Redis Access and Python Search Fallback",
     "type": "library",
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Sian\\LaravelRedisOM\\": "src/"
+            "Masan27\\LaravelRedisOM\\": "src/"
         }
     },
     "require": {
@@ -19,7 +19,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Sian\\LaravelRedisOM\\RedisOMServiceProvider"
+                "Masan27\\LaravelRedisOM\\RedisOMServiceProvider"
             ]
         }
     }

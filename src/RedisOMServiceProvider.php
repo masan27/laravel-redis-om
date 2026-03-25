@@ -1,6 +1,6 @@
 <?php
 
-namespace Sian\LaravelRedisOM;
+namespace Masan27\LaravelRedisOM;
 
 use Illuminate\Support\ServiceProvider;
 
@@ -27,6 +27,10 @@ class RedisOMServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__ . '/../config/redis_om.php' => config_path('redis_om.php'),
             ], 'redis-om-config');
+
+            $this->commands([
+                Console\InstallCommand::class,
+            ]);
         }
     }
 }

@@ -1,6 +1,6 @@
 <?php
 
-namespace Sian\LaravelRedisOM;
+namespace Masan27\LaravelRedisOM;
 
 use Illuminate\Support\Str;
 
@@ -24,7 +24,7 @@ abstract class RedisOM
     public static function query(?string $modelName = null): RedisOMQueryBuilder
     {
         $currentClass = static::class;
-        $isBase = $currentClass === self::class || $currentClass === 'Sian\LaravelRedisOM\RedisOM';
+        $isBase = $currentClass === self::class || $currentClass === 'Masan27\LaravelRedisOM\RedisOM';
 
         if ($modelName || $isBase) {
             // Sebutkan nama model secara eksplisit (Generic Style)
@@ -55,7 +55,7 @@ abstract class RedisOM
                 return $data;
             }
             $currentClass = static::class;
-            if ($currentClass !== self::class && $currentClass !== 'Sian\LaravelRedisOM\RedisOM') {
+            if ($currentClass !== self::class && $currentClass !== 'Masan27\LaravelRedisOM\RedisOM') {
                 return new static($data);
             }
             return (object) $data;
@@ -183,7 +183,7 @@ abstract class RedisOM
     public static function __callStatic($method, $parameters)
     {
         $currentClass = static::class;
-        if ($currentClass === self::class || $currentClass === 'Sian\LaravelRedisOM\RedisOM') {
+        if ($currentClass === self::class || $currentClass === 'Masan27\LaravelRedisOM\RedisOM') {
             throw new \Exception("Static call '{$method}' must be called from a Model (e.g. User::{$method}) or via RedisOM::query('ModelName')->{$method}(...)");
         }
 

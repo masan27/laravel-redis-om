@@ -1,6 +1,6 @@
 <?php
 
-namespace Sian\LaravelRedisOM;
+namespace Masan27\LaravelRedisOM;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;

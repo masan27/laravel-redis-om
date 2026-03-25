@@ -29,7 +29,19 @@ composer require masan27/laravel-redis-om
 
 ## Configuration
 
-Publish the config file:
+Complete the installation and publish the config file:
+
+```bash
+php artisan redis-om:install
+```
+
+This command will:
+1. Publish the `config/redis_om.php` file.
+2. Automatically add `REDIS_OM_URL`, `REDIS_OM_CONNECTION`, and `REDIS_OM_TIMEOUT` to your `.env` file if they are missing.
+
+### Manual Configuration (Optional)
+
+If you prefer to do it manually, you can publish the config file using:
 
 ```bash
 php artisan vendor:publish --tag=redis-om-config
@@ -79,7 +91,7 @@ REDIS_OM_CONNECTION=redis_om
 ```php
 namespace App\Models\Redis;
 
-use Sian\LaravelRedisOM\RedisOM;
+use Masan27\LaravelRedisOM\RedisOM;
 
 class User extends RedisOM {}
 
@@ -95,7 +107,7 @@ $user->save();
 ### Generic Style (No model class required)
 
 ```php
-use Sian\LaravelRedisOM\RedisOM;
+use Masan27\LaravelRedisOM\RedisOM;
 
 // Generic query
 $results = RedisOM::query('users')->where('role', 'admin')->get();
