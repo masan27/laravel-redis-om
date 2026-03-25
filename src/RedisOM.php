@@ -7,6 +7,13 @@ use Illuminate\Support\Str;
 abstract class RedisOM
 {
     /**
+     * The model's relations.
+     * 
+     * @var array
+     */
+    protected array $relations = [];
+
+    /**
      * Get the model name (e.g., 'User').
      */
     public static function getModelName(): string

@@ -158,7 +158,7 @@ class RedisOMQueryBuilder
             });
         }
 
-        $relationDef = $this->service->getRelations($this->model)[$relation] ?? null;
+        $relationDef = $this->service->getRelations($this->model, $this->modelClass)[$relation] ?? null;
         if (!$relationDef) {
             throw new \Exception("Relation '{$relation}' not defined for model '{$this->model}'");
         }
@@ -190,7 +190,7 @@ class RedisOMQueryBuilder
             });
         }
 
-        $relationDef = $this->service->getRelations($this->model)[$relation] ?? null;
+        $relationDef = $this->service->getRelations($this->model, $this->modelClass)[$relation] ?? null;
         if (!$relationDef) {
             throw new \Exception("Relation '{$relation}' not defined for model '{$this->model}'");
         }
@@ -276,7 +276,7 @@ class RedisOMQueryBuilder
      */
     protected function loadRelations(Collection $items): void
     {
-        $relationDefinitions = $this->service->getRelations($this->model);
+        $relationDefinitions = $this->service->getRelations($this->model, $this->modelClass);
         $groupedRelations = [];
 
         // Parse nested relations: ['partner.contacts'] -> ['partner' => ['contacts']]

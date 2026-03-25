@@ -55,10 +55,35 @@ return [
     'connection' => env('REDIS_OM_CONNECTION', 'default'),
     'timeout'    => env('REDIS_OM_TIMEOUT', 30),
     'relations'  => [
-        // Define your cross-model relations here
+        // Global relations defined here
     ],
 ];
 ```
+
+### Defining Relations in Models
+
+You can also define relations directly in your Model class for a more Eloquent-like experience:
+
+```php
+namespace App\Models\Redis;
+
+use Masan27\LaravelRedisOM\RedisOM;
+
+class Transaction extends RedisOM
+{
+    protected array $relations = [
+        'user' => [
+            'type'        => 'hasOne',
+            'related'     => 'User',
+            'foreign_key' => 'id',
+            'local_key'   => 'user_id'
+        ],
+    ];
+}
+```
+
+> [!TIP]
+> **Merge Strategy**: If a relation is defined in both the config and the model, the model's definition will take precedence.
 
 ### Redis Configuration
 

@@ -4,28 +4,49 @@ This library supports cross-Redis relationships using `belongsTo` and `hasMany` 
 
 ## 1. Defining Relations
 
-Relations are defined in `config/redis_om.php`:
+There are two ways to define relations:
+
+### A. Via Configuration (`config/redis_om.php`)
+
+Best for generic models or centralizing configuration.
 
 ```php
 'relations' => [
     'Transaction' => [
         'user' => [
-            'type'        => 'hasOne', // Currently mapped logic
+            'type'        => 'hasOne',
             'related'     => 'User', 
             'foreign_key' => 'id', 
             'local_key'   => 'user_id'
         ],
     ],
-    'User' => [
-        'posts' => [
-            'type'        => 'hasMany', 
-            'related'     => 'Post', 
-            'foreign_key' => 'user_id', 
-            'local_key'   => 'id'
-        ],
-    ]
 ],
 ```
+
+### B. Via Model Class (Eloquent Style)
+
+Recommended for a cleaner, more encapsulated approach.
+
+```php
+namespace App\Models\Redis;
+
+use Masan27\LaravelRedisOM\RedisOM;
+
+class Transaction extends RedisOM
+{
+    protected array $relations = [
+        'user' => [
+            'type'        => 'hasOne',
+            'related'     => 'User',
+            'foreign_key' => 'id',
+            'local_key'   => 'user_id'
+        ],
+    ];
+}
+```
+
+> [!NOTE]
+> If a relation is defined in both places, the definition in the **Model class** takes precedence.
 
 ---
 

@@ -58,11 +58,30 @@ class RedisModel
     }
 
     /**
-     * Get relation definitions for a model
+     * Get relation definitions for a model.
+     * Merges relations from config and the Model class itself.
      */
-    public function getRelations(string $model): array
+    public function getRelations(string $model, ?string $modelClass = null): array
     {
-        return $this->relations[$model] ?? [];
+        $configRelations = $this->relations[$model] ?? [];
+        $classRelations = [];
+
+        if ($modelClass && class_exists($modelClass)) {
+            try {
+                // We use reflection or just instantiate to get the protected property
+                // Since it's protected, we can access it if we're in the same hierarchy, 
+                // but RedisModel is not. We'll use a temporary instance or reflection.
+                $instance = new $modelClass();
+                $reflector = new \ReflectionClass($instance);
+                $property = $reflector->getProperty('relations');
+                $property->setAccessible(true);
+                $classRelations = $property->getValue($instance);
+            } catch (\Exception $e) {
+                // If it fails (e.g. no property), just ignore
+            }
+        }
+
+        return array_merge($configRelations, $classRelations);
     }
 
     /**
