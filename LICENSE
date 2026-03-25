@@ -1,16 +1,16 @@
-CUSTOM FORK-ONLY LICENSE
+CUSTOM LICENSE
 
 Copyright (c) 2026 Masan27
 
 TERMS AND CONDITIONS
 
-1. PROHIBITED ACTIONS:
-   - Cloning: You are strictly prohibited from cloning this repository to any local machine, server, or alternative hosting platform.
-   - Republishing: You are strictly prohibited from republishing, redistributing, or sublicensing the software or any portion of it in any form.
-   - Unauthorized Copying: Any form of copying the source code, except as expressly permitted in Section 2, is strictly forbidden.
+1. PERMITTED ACTIONS:
+   - Personal/Internal Use: You are permitted to clone, download, and use this software for your own personal projects or internal business purposes.
+   - Forking: You are permitted to use the "Fork" functionality provided by the hosting platform (https://github.com/masan27/laravel-redis-om) to create a copy of this repository within the same platform.
 
-2. PERMITTED ACTIONS:
-   - Forking: You are permitted to use the "Fork" functionality provided by the hosting platform (https://github.com/masan27/laravel-redis-om) to create a copy of this repository within the same platform for your personal use or for contributing back to this project via Pull Requests.
+2. PROHIBITED ACTIONS:
+   - Unauthorized Redistribution: You are strictly prohibited from republishing, redistributing, or sublicensing the software or any portion of it in any form, especially under a different name or as a separate product.
+   - Rebranding: You may not modify the software and release it as a new package or product.
 
 3. DISCLAIMER:
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
