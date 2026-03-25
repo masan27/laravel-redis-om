@@ -21,23 +21,10 @@ This library automatically tracks the last update time for every record stored a
 
 ## Installation
 
-Add the repository to your `composer.json`:
+Install the package via Composer:
 
-```json
-"repositories": [
-    {
-        "type": "vcs",
-        "url": "https://github.com/masan27/laravel-redis-om"
-    }
-],
-"require": {
-    "masan27/laravel-redis-om": "0.1.0"
-}
-```
-
-Then run:
 ```bash
-composer update masan27/laravel-redis-om
+composer require masan27/laravel-redis-om
 ```
 
 ## Configuration
