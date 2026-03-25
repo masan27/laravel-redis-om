@@ -145,6 +145,41 @@ abstract class RedisOM
     }
 
     /**
+     * Execute a transaction (MULTI/EXEC).
+     * 
+     * @param callable $callback
+     * @return mixed
+     */
+    public static function transaction(callable $callback): mixed
+    {
+        return app(RedisModel::class)->transaction($callback);
+    }
+
+    /**
+     * Start a manual Redis transaction (MULTI).
+     */
+    public static function beginTransaction(): void
+    {
+        app(RedisModel::class)->beginTransaction();
+    }
+
+    /**
+     * Commit a manual Redis transaction (EXEC).
+     */
+    public static function commit(): array|bool
+    {
+        return app(RedisModel::class)->commit();
+    }
+
+    /**
+     * Rollback a manual Redis transaction (DISCARD).
+     */
+    public static function rollBack(): void
+    {
+        app(RedisModel::class)->rollBack();
+    }
+
+    /**
      * Static create.
      */
     public static function create(array $attributes): self

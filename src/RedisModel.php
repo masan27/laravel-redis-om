@@ -328,6 +328,43 @@ class RedisModel
     }
 
     /**
+     * Perform a transaction (MULTI/EXEC) using a closure.
+     * 
+     * @param callable $callback
+     * @return mixed
+     */
+    public function transaction(callable $callback): mixed
+    {
+        return $this->redis()->transaction($callback);
+    }
+
+    /**
+     * Start a new Redis transaction (MULTI).
+     */
+    public function beginTransaction(): void
+    {
+        $this->redis()->multi();
+    }
+
+    /**
+     * Commit the current Redis transaction (EXEC).
+     * 
+     * @return array|bool
+     */
+    public function commit(): array|bool
+    {
+        return $this->redis()->exec();
+    }
+
+    /**
+     * Rollback (Discard) the current Redis transaction (DISCARD).
+     */
+    public function rollBack(): void
+    {
+        $this->redis()->discard();
+    }
+
+    /**
      * Perform a mass insert/save on multiple records using a Redis pipeline.
      * Each record must have an 'id' or 'pk' field.
      * 
