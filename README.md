@@ -27,17 +27,17 @@ Add the repository to your `composer.json`:
 "repositories": [
     {
         "type": "vcs",
-        "url": "https://github.com/masan27/laravel-redis-om-py"
+        "url": "https://github.com/masan27/laravel-redis-om"
     }
 ],
 "require": {
-    "sian/laravel-redis-om": "0.1.0"
+    "masan27/laravel-redis-om": "0.1.0"
 }
 ```
 
 Then run:
 ```bash
-composer update sian/laravel-redis-om
+composer update masan27/laravel-redis-om
 ```
 
 ## Configuration
