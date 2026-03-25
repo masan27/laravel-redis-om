@@ -1,0 +1,26 @@
+{
+    "name": "sian/laravel-redis-om",
+    "version": "0.1.0",
+    "description": "Sian's Redis OM implementation for Laravel with Direct Redis Access and Python Search Fallback",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Sian\\LaravelRedisOM\\": "src/"
+        }
+    },
+    "require": {
+        "php": "^8.3",
+        "illuminate/support": "^11.0|^12.0",
+        "illuminate/redis": "^11.0|^12.0",
+        "illuminate/pagination": "^11.0|^12.0",
+        "illuminate/http": "^11.0|^12.0"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Sian\\LaravelRedisOM\\RedisOMServiceProvider"
+            ]
+        }
+    }
+}
