@@ -48,6 +48,34 @@ class RedisOMQueryBuilder
     }
 
     /**
+     * Add a whereNull clause to the query.
+     */
+    public function whereNull(string $field): self
+    {
+        $this->filters[] = [
+            'field' => $field,
+            'op' => 'null',
+            'value' => null,
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Add a whereNotNull clause to the query.
+     */
+    public function whereNotNull(string $field): self
+    {
+        $this->filters[] = [
+            'field' => $field,
+            'op' => 'not_null',
+            'value' => null,
+        ];
+
+        return $this;
+    }
+
+    /**
      * Add a whereIn clause to the query.
      */
     public function whereIn(string $field, array $values): self
