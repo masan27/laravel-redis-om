@@ -1,4 +1,4 @@
-# Querying & Pagination
+# Querying & Pagination (Model Style)
 
 Advanced queries use the `query()` entry point, which communicates with the Python backend for RediSearch capabilities.
 
@@ -57,11 +57,6 @@ $users = User::query()
 Best for tables with page numbers.
 ```php
 $paginated = User::query()->where('role', 'user')->paginate(15);
-
-// In Blade/Svelte:
-// $paginated->items()
-// $paginated->total()
-// $paginated->currentPage()
 ```
 
 ### Simple Paginate (No total count)
@@ -78,27 +73,14 @@ $paginated = User::query()->cursorPaginate(15);
 
 ---
 
-## 5. Generic Query (No Model required)
+## 5. Mass Update & Delete
 
-```php
-use Masan27\LaravelRedisOM\RedisOM;
-
-$results = RedisOM::query('transactions')
-    ->where('status', 'success')
-    ->get();
-```
-
----
-
-## 6. Mass Update & Delete
-
-You can perform mass operations directly from a query builder. These operations are performed using **Redis Pipelines** and **Auto-Chunking** (1,000 items per batch) for maximum performance and safety.
+You can perform mass operations directly from a query builder. These operations are performed using **Redis Pipelines** and **Auto-Chunking** (1,000 items per batch).
 
 ```php
 // Mass Update
 User::query()
     ->where('is_active', false)
-    ->where('last_login', '<', now()->subDays(30)->toIso8601String())
     ->update(['status' => 'archived']);
 
 // Mass Delete

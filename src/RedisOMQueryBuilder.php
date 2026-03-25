@@ -429,6 +429,37 @@ class RedisOMQueryBuilder
     }
 
     /**
+     * Execute a mass insert of records.
+     * 
+     * @param array $records Array of attribute arrays
+     * @param int|null $ttl
+     * @return bool
+     */
+    public function insert(array $records, ?int $ttl = null): bool
+    {
+        if (empty($records)) {
+            return false;
+        }
+
+        // If it's a single record (not nested), wrap it
+        if (!is_array(reset($records))) {
+            $records = [$records];
+        }
+
+        // Perform mass insert via RedisModel with auto-chunking (1000 per chunk)
+        $chunks = array_chunk($records, 1000);
+        $success = true;
+
+        foreach ($chunks as $chunk) {
+            if (!$this->service->massInsert($this->model, $chunk, $ttl)) {
+                $success = false;
+            }
+        }
+
+        return $success;
+    }
+
+    /**
      * Execute a mass update on the matching records.
      * 
      * @param array $attributes

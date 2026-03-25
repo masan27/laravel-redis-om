@@ -328,6 +328,49 @@ class RedisModel
     }
 
     /**
+     * Perform a mass insert/save on multiple records using a Redis pipeline.
+     * Each record must have an 'id' or 'pk' field.
+     * 
+     * @param string $model
+     * @param array $records
+     * @param int|null $ttl
+     * @return bool
+     */
+    public function massInsert(string $model, array $records, ?int $ttl = null): bool
+    {
+        try {
+            $this->redis()->pipeline(function ($pipe) use ($model, $records, $ttl) {
+                $now = Carbon::now()->toIso8601String();
+                
+                foreach ($records as $record) {
+                    $id = $record['id'] ?? $record['pk'] ?? null;
+                    if (!$id) continue;
+
+                    $key = "{$model}:{$id}";
+                    
+                    // Inject update_time
+                    unset($record['update_time']);
+                    $payload = [
+                        'update_time' => $now,
+                        ...$record,
+                    ];
+
+                    $pipe->command('JSON.SET', [$key, '$', json_encode($payload)]);
+
+                    if ($ttl) {
+                        $pipe->expire($key, $ttl);
+                    }
+                }
+            });
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error("RedisOM massInsert Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * CHECK if key exists directly in Redis.
      * 
      * @param string $key Full key tanpa prefix (e.g. 'Model:id')

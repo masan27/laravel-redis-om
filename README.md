@@ -141,13 +141,16 @@ $results = RedisOM::query('users')->where('role', 'admin')->get();
 RedisOM::set('app:status', 'online', 3600);
 ```
 
-## Detailed Examples
+Detailed usage examples for both interaction styles:
 
-For more in-depth usage, check the following guides:
+### Model Style (Eloquent-like)
+- [**CRUD Operations**](examples/model/crud.md) — Finding, saving, updating, and deleting via Model classes.
+- [**Querying & Pagination**](examples/model/query.md) — Advanced search and pagination using Models.
+- [**Relations**](examples/model/relations.md) — Cross-model relations and eager loading.
 
-- [**CRUD Operations**](examples/crud.md) — Finding, saving, updating (atomic), and deleting.
-- [**Querying & Pagination**](examples/query.md) — Advanced filtering, search, and pagination styles.
-- [**Relations & Eager Loading**](examples/relations.md) — Cross-model relations and `with()` support.
+### Generic Style (Pure RedisOM)
+- [**CRUD Operations**](examples/generic/crud.md) — Direct key/value and mass operations.
+- [**Querying**](examples/generic/query.md) — Flexible search without predefined models.
 
 ## Redis Prefixing
 

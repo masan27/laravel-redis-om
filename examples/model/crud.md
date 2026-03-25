@@ -1,10 +1,9 @@
-# CRUD & Direct Redis Operations
+# CRUD & Direct Redis Operations (Model Style)
 
-This library provides two styles of interaction: **Model Style** (Eloquent-like) and **Generic Style** (Entry-point `RedisOM`).
+This guide covers basic operations using **Model Style** (Eloquent-like) interaction. All examples assume you have a `User` model extending `RedisOM`.
 
 ## 1. Finding Records
 
-### Model Style
 ```php
 use App\Models\Redis\User;
 
@@ -12,13 +11,6 @@ $user = User::find(1); // Returns User instance or null
 if ($user) {
     echo $user->name;
 }
-```
-
-### Generic Style
-```php
-use Masan27\LaravelRedisOM\RedisOM;
-
-$data = RedisOM::find('1', 'User'); // Returns (object) array or null
 ```
 
 ---
@@ -42,6 +34,20 @@ $user->name = 'Budi';
 $user->save(); // Direct JSON.SET to Redis
 ```
 
+### Create Many (Mass Insert)
+Insert multiple records in a single high-performance operation using Redis pipelines.
+
+```php
+User::insert([
+    ['id' => 10, 'name' => 'Alice', 'role' => 'user'],
+    ['id' => 11, 'name' => 'Bob', 'role' => 'user'],
+    ['id' => 12, 'name' => 'Charlie', 'role' => 'admin'],
+]);
+
+// Supports optional TTL (seconds)
+User::insert($manyUsers, 3600);
+```
+
 ---
 
 ## 3. Updating
@@ -60,8 +66,6 @@ User::update('User:1', [
     'role' => 'superadmin',
     'last_login' => now()->toIso8601String()
 ]);
-
-// Note: update_time is automatically updated on every write.
 ```
 
 ### Mass Update (Multi-records)
@@ -80,45 +84,22 @@ $user = User::find(1);
 $user->delete();
 ```
 
-### Static Delete (Generic)
+### Static Delete
 ```php
 User::drop('User:1');
-// OR
-RedisOM::drop('User:1');
+```
 
 ### Mass Delete (Multi-records)
 Delete multiple records matching a query criteria.
 ```php
 User::where('status', 'banned')->delete();
 ```
-```
 
 ---
 
-## 5. Direct Key Operations (Generic)
-
-### Set Scalar (String, Int, Bool)
-Stored as plain Redis values (not JSON).
-```php
-RedisOM::set('app:status', 'online', 3600); // 1 hour TTL
-RedisOM::set('counter:login', 42);
-RedisOM::set('is_active', true); // Stored as 1
-```
-
-### Get Generic
-```php
-$status = RedisOM::find('app:status');
-```
-
----
-
-## 6. Check Existence
+## 5. Check Existence
 ```php
 if (User::exists(1)) {
-    // ...
-}
-
-if (RedisOM::has('app:status')) {
     // ...
 }
 ```
