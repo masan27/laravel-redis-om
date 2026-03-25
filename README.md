@@ -9,7 +9,7 @@ A high-performance Redis Object Mapper (OM) for Laravel, powered by RedisJSON an
 - **Transaction Support**: Group multiple operations into atomic `MULTI`/`EXEC` blocks with automatic rollback on exceptions.
 - **Scalar Support**: Supports direct storage of strings, numbers, and booleans in Generic Style.
 - **Atomic Updates**: Partial updates are performed atomically using RedisJSON paths.
-- **Eager Loading**: Supports Eloquent-style relationships (`hasOne`, `hasMany`) and eager loading with `with()`.
+- **Eager Loading**: Supports record relationships (`hasOne`, `hasMany`) and eager loading with `with()`.
 
 ## Audit Trail
 
@@ -147,12 +147,14 @@ Detailed usage examples for both interaction styles:
 ### Model Style (Eloquent-like)
 - [**CRUD Operations**](examples/model/crud.md) — Finding, saving, updating, and deleting via Model classes.
 - [**Querying & Pagination**](examples/model/query.md) — Advanced search and pagination using Models.
-- [**Relations**](examples/model/relations.md) — Cross-model relations and eager loading.
-- [**Transactions**](examples/transaction.md) — Atomic operations with MULTI/EXEC.
 
 ### Generic Style (Pure RedisOM)
 - [**CRUD Operations**](examples/generic/crud.md) — Direct key/value and mass operations.
 - [**Querying**](examples/generic/query.md) — Flexible search without predefined models.
+
+### Advanced Features (Applicable to both)
+- [**Relations**](examples/relations.md) — Data relations and eager loading.
+- [**Transactions**](examples/transaction.md) — Atomic operations with MULTI/EXEC.
 
 ## Redis Prefixing
 
