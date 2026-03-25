@@ -17,7 +17,7 @@ This library automatically tracks the last update time for every record stored a
 
 - **`updated_time`**: Automatically set to the current ISO8601 timestamp whenever a record is created or updated via `save()`, `create()`, or `update()`.
 
-> [!IMPORTANT]
+> **IMPORTANT**
 > **Reserved Attribute**: Avoid using `updated_time` as a custom attribute name in your models or data payloads. This field is reserved for the system's automatic audit trail and will be overwritten on every write operation.
 
 ## Installation
@@ -83,7 +83,7 @@ class Transaction extends RedisOM
 }
 ```
 
-> [!TIP]
+> **TIP**
 > **Merge Strategy**: If a relation is defined in both the config and the model, the model's definition will take precedence.
 
 ### Redis Configuration
@@ -163,7 +163,7 @@ To avoid key collisions, it is highly recommended to use a global prefix. Ensure
 - **Laravel**: Add a prefix in your `config/database.php` Redis options.
 - **Python**: Define the `global_key_prefix` in your Python model's `BaseMeta`.
 
-> [!TIP]
+> **TIP**
 > This library's `directGet` and `directSet` methods respect the prefix configured in your Laravel Redis database options (if using PHPRedis).
 
 ## License
