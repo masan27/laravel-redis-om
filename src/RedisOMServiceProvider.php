@@ -30,6 +30,7 @@ class RedisOMServiceProvider extends ServiceProvider
 
             $this->commands([
                 Console\InstallCommand::class,
+                Console\ModelMakeCommand::class,
             ]);
         }
     }

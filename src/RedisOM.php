@@ -4,9 +4,47 @@ namespace Masan27\LaravelRedisOM;
 
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use JsonSerializable;
+use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Contracts\Support\Jsonable;
 
-abstract class RedisOM
+abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
 {
+    /**
+     * The model's attributes.
+     * 
+     * @var array
+     */
+    protected array $attributes = [];
+
+    /**
+     * The model's original attributes.
+     * 
+     * @var array
+     */
+    protected array $original = [];
+
+    /**
+     * The attributes that are mass assignable.
+     * 
+     * @var array
+     */
+    protected array $fillable = [];
+
+    /**
+     * The attributes that aren't mass assignable.
+     * 
+     * @var array
+     */
+    protected array $guarded = ['*'];
+
+    /**
+     * The attributes that should be cast.
+     * 
+     * @var array
+     */
+    protected array $casts = [];
+
     /**
      * The model's relations.
      * 
@@ -49,8 +87,8 @@ abstract class RedisOM
      */
     public static function find($id, ?string $modelName = null)
     {
-        $model = $modelName ?: static::getModelName();
-        $key = "{$model}:{$id}";
+        $modelNameExplicit = $modelName ?: static::getModelName();
+        $key = "{$modelNameExplicit}:{$id}";
 
         /** @var RedisModel $service */
         $service = app(RedisModel::class);
@@ -62,11 +100,21 @@ abstract class RedisOM
                 // Scalar value (int, bool, string, float)
                 return $data;
             }
+
+            // Audit Trail fields are not needed in PHP
+            unset($data['updated_time'], $data['update_time']);
+
             $currentClass = static::class;
-            if ($currentClass !== self::class && $currentClass !== 'Masan27\LaravelRedisOM\RedisOM') {
-                return new static($data);
+            $isBase = $currentClass === self::class || $currentClass === 'Masan27\LaravelRedisOM\RedisOM';
+
+            if (!$isBase) {
+                // Model Style: Create instance and bypass fillable protection for database load
+                $instance = new static();
+                $instance->attributes = $data;
+                return $instance->syncOriginal();
             }
-            unset($data['update_time']);
+
+            // Generic Style: Return stdClass object
             return (object) $data;
         }
 
@@ -96,6 +144,7 @@ abstract class RedisOM
     public function __construct(array $attributes = [])
     {
         $this->fill($attributes);
+        $this->syncOriginal();
     }
 
     /**
@@ -103,11 +152,149 @@ abstract class RedisOM
      */
     public function fill(array $attributes): self
     {
-        unset($attributes['update_time']);
-        foreach ($attributes as $key => $value) {
-            $this->{$key} = $value;
+        $completelyGuarded = $this->totallyGuarded();
+
+        foreach ($this->fillableFromArray($attributes) as $key => $value) {
+            if ($this->isFillable($key)) {
+                $this->setAttribute($key, $value);
+            } elseif ($completelyGuarded) {
+                // If it's totally guarded, we might want to throw an exception or just skip.
+                // Standard Laravel behavior is to skip unless forced.
+            }
         }
+
         return $this;
+    }
+
+    /**
+     * Determine if the model is totally guarded.
+     */
+    protected function totallyGuarded(): bool
+    {
+        return count($this->fillable) === 0 && $this->guarded === ['*'];
+    }
+
+    /**
+     * Get the fillable attributes of a given array.
+     */
+    protected function fillableFromArray(array $attributes): array
+    {
+        if (count($this->fillable) > 0) {
+            return array_intersect_key($attributes, array_flip($this->fillable));
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * Determine if the given attribute may be mass assigned.
+     */
+    public function isFillable(string $key): bool
+    {
+        if (in_array($key, $this->fillable)) {
+            return true;
+        }
+
+        if ($this->isGuarded($key)) {
+            return false;
+        }
+
+        return empty($this->fillable);
+    }
+
+    /**
+     * Determine if the given key is guarded.
+     */
+    public function isGuarded(string $key): bool
+    {
+        if (empty($this->guarded) || $this->guarded === ['*']) {
+            return $this->guarded === ['*'];
+        }
+
+        return in_array($key, $this->guarded);
+    }
+
+    /**
+     * Set a given attribute on the model.
+     */
+    public function setAttribute(string $key, $value): self
+    {
+        $this->attributes[$key] = $value;
+        return $this;
+    }
+
+    /**
+     * Get a given attribute from the model.
+     */
+    public function getAttribute(string $key)
+    {
+        if (!$key) {
+            return null;
+        }
+
+        $value = $this->attributes[$key] ?? null;
+
+        // Apply casting
+        return $this->castAttribute($key, $value);
+    }
+
+    /**
+     * Cast an attribute to a native PHP type.
+     */
+    protected function castAttribute(string $key, $value)
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $type = $this->casts[$key] ?? null;
+
+        if ($type === 'date' || $type === 'datetime') {
+            return Carbon::parse($value);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Sync the original attributes with the current.
+     */
+    public function syncOriginal(): self
+    {
+        $this->original = $this->attributes;
+        return $this;
+    }
+
+    /**
+     * Dynamically retrieve attributes on the model.
+     */
+    public function __get($key)
+    {
+        return $this->getAttribute($key);
+    }
+
+    /**
+     * Dynamically set attributes on the model.
+     */
+    public function __set($key, $value)
+    {
+        $this->setAttribute($key, $value);
+    }
+
+    /**
+     * Determine if an attribute exists on the model.
+     */
+    public function __isset($key)
+    {
+        return isset($this->attributes[$key]);
+    }
+
+    /**
+     * Unset an attribute on the model.
+     */
+    public function __unset($key)
+    {
+        unset($this->attributes[$key]);
     }
 
     /**
@@ -115,13 +302,13 @@ abstract class RedisOM
      */
     public function getFullKey(): string
     {
-        $model = static::getModelName();
-        $id = $this->pk ?? $this->id ?? null;
+        $id = $this->getAttribute('pk') ?? $this->getAttribute('id') ?? null;
 
         if (!$id) {
             throw new \Exception("Cannot generate Redis key: Model has no ID (pk/id)");
         }
 
+        $model = static::getModelName();
         return "{$model}:{$id}";
     }
 
@@ -131,8 +318,20 @@ abstract class RedisOM
      */
     public function save(): bool
     {
-        $attributes = get_object_vars($this);
-        return app(RedisModel::class)->directSet($this->getFullKey(), $attributes);
+        /** @var RedisModel $service */
+        $service = app(RedisModel::class);
+
+        // Audit Trail (Redis-side only): updated_time
+        $attributes = $this->attributes;
+        $attributes['updated_time'] = Carbon::now()->toIso8601String();
+
+        $success = $service->directSet($this->getFullKey(), $attributes);
+
+        if ($success) {
+            $this->syncOriginal();
+        }
+
+        return $success;
     }
 
     /**
@@ -142,6 +341,42 @@ abstract class RedisOM
     public function delete(): bool
     {
         return app(RedisModel::class)->directDelete($this->getFullKey());
+    }
+
+    /**
+     * Update the model with attributes and save.
+     */
+    public function updateModel(array $attributes = []): bool
+    {
+        if (!$this->exists($this->getAttribute('id') ?? $this->getAttribute('pk'))) {
+            return false;
+        }
+
+        return $this->fill($attributes)->save();
+    }
+
+    /**
+     * Convert the model instance to an array.
+     */
+    public function toArray(): array
+    {
+        return $this->attributes;
+    }
+
+    /**
+     * Convert the model instance to JSON.
+     */
+    public function toJson($options = 0): string
+    {
+        return json_encode($this->jsonSerialize(), $options);
+    }
+
+    /**
+     * Convert the object into something JSON serializable.
+     */
+    public function jsonSerialize(): mixed
+    {
+        return $this->toArray();
     }
 
     /**
