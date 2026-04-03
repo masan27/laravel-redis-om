@@ -359,9 +359,13 @@ class RedisModel
             $raw    = $this->executeRaw(array_merge(['FT.SEARCH'], $args));
             $result = $this->parseFtSearchResult($raw);
 
-            // Strip internal audit fields
+            // Strip internal audit and hidden fields
             $result['data'] = array_map(function ($doc) {
-                unset($doc['update_time'], $doc['updated_time']);
+                foreach ($doc as $key => $val) {
+                    if ($key === 'updated_time' || $key === 'update_time' || str_starts_with($key, '_')) {
+                        unset($doc[$key]);
+                    }
+                }
                 return $doc;
             }, $result['data']);
 
@@ -440,9 +444,9 @@ class RedisModel
     {
         try {
             if (is_array($value)) {
-                unset($value['update_time']);
+                unset($value['_updated_time'], $value['updated_time'], $value['update_time']);
                 $payload = [
-                    'update_time' => Carbon::now()->toIso8601String(),
+                    '_updated_time' => Carbon::now()->toIso8601String(),
                     ...$value,
                 ];
                 $this->executeRaw(['JSON.SET', $key, '$', json_encode($payload)]);
@@ -472,7 +476,7 @@ class RedisModel
                 $this->executeRaw(['JSON.SET', $key, "\$.{$field}", json_encode($val)]);
             }
 
-            $this->executeRaw(['JSON.SET', $key, '$.update_time', json_encode(
+            $this->executeRaw(['JSON.SET', $key, '$._updated_time', json_encode(
                 Carbon::now()->toIso8601String()
             )]);
 
@@ -529,7 +533,7 @@ class RedisModel
                     if (!$id) continue;
 
                     $key = app(IndexManager::class)->resolveKeyPrefix($model) . $id;
-                    unset($record['update_time']);
+                    unset($record['_updated_time'], $record['updated_time'], $record['update_time']);
                     
                     // Normalization
                     foreach ($indexedFields as $f => $type) {
@@ -546,7 +550,7 @@ class RedisModel
                         }
                     }
 
-                    $payload = ['update_time' => $now, ...$record];
+                    $payload = ['_updated_time' => $now, ...$record];
 
                     $pipe->rawCommand('JSON.SET', $key, '$', json_encode($payload));
 
@@ -594,7 +598,7 @@ class RedisModel
                         }
                     }
 
-                    $pipe->rawCommand('JSON.SET', $key, '$.update_time', json_encode($now));
+                    $pipe->rawCommand('JSON.SET', $key, '$._updated_time', json_encode($now));
                 }
             });
 

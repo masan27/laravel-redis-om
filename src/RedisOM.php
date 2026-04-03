@@ -129,8 +129,12 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
                 return $data;
             }
 
-            // Audit Trail fields are not needed in PHP
-            unset($data['updated_time'], $data['update_time']);
+            // Audit Trail and internal fields are not needed in PHP
+            foreach ($data as $key => $val) {
+                if ($key === 'updated_time' || $key === 'update_time' || str_starts_with($key, '_')) {
+                    unset($data[$key]);
+                }
+            }
 
             $currentClass = static::class;
             $isBase = $currentClass === self::class || $currentClass === 'Masan27\LaravelRedisOM\RedisOM';
@@ -348,9 +352,9 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
         /** @var RedisModel $service */
         $service = app(RedisModel::class);
 
-        // Audit Trail (Redis-side only): updated_time
+        // Audit Trail (Redis-side only): _updated_time
         $attributes = $this->attributes;
-        $attributes['updated_time'] = Carbon::now()->toIso8601String();
+        $attributes['_updated_time'] = Carbon::now()->toIso8601String();
 
         // Automatic Normalization for TAG_CASE and DATE/DATETIME
         foreach ($this->index as $field => $type) {
