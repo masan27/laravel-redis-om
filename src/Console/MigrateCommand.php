@@ -3,6 +3,8 @@
 namespace Masan27\LaravelRedisOM\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Log;
 use Masan27\LaravelRedisOM\IndexManager;
 
 class MigrateCommand extends Command
@@ -27,6 +29,10 @@ class MigrateCommand extends Command
         $force     = $this->option('force');
         $modelArg  = $this->argument('model');
         $modelPath = config('redis_om.model_path', app_path('Models/Redis'));
+
+        if (!$this->ensureConnection($indexManager)) {
+            return;
+        }
 
         $this->info('Redis OM Migrate' . ($force ? ' (--force)' : ''));
         $this->newLine();
@@ -109,5 +115,51 @@ class MigrateCommand extends Command
         $all          = $indexManager->discoverModels($modelPath);
 
         return array_filter($all, fn($class) => class_basename($class) === $name);
+    }
+    /**
+     * Ensure we can connect to Redis, or try fallback host.
+     */
+    protected function ensureConnection(IndexManager $indexManager): bool
+    {
+        $connectionName = config('redis_om.connection', 'default');
+        
+        try {
+            // Test connection with a simple command
+            Redis::connection($connectionName)->command('PING');
+            return true;
+        } catch (\Exception $e) {
+            $host = config("database.redis.{$connectionName}.host");
+            $newHost = null;
+
+            if ($host === 'localhost' || $host === '127.0.0.1') {
+                $newHost = 'host.docker.internal';
+            } elseif ($host === 'host.docker.internal') {
+                $newHost = '127.0.0.1';
+            }
+
+            if ($newHost) {
+                $this->warn("Connection to Redis at '{$host}' failed. Trying fallback host '{$newHost}'...");
+                
+                // Dynamically update config
+                config()->set("database.redis.{$connectionName}.host", $newHost);
+                
+                // Purge instance to force reconnect
+                Redis::purge($connectionName);
+
+                try {
+                    Redis::connection($connectionName)->command('PING');
+                    $this->info("Successfully connected to Redis using fallback host '{$newHost}'.");
+                    return true;
+                } catch (\Exception $e2) {
+                    $this->error("Connection to Redis failed on both '{$host}' and '{$newHost}'.");
+                    $this->error($e2->getMessage());
+                    return false;
+                }
+            }
+
+            $this->error("Connection to Redis at '{$host}' failed.");
+            $this->error($e->getMessage());
+            return false;
+        }
     }
 }
