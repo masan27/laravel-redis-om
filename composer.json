@@ -1,7 +1,7 @@
 {
     "name": "masan27/laravel-redis-om",
-    "version": "1.2.1",
-    "description": "Laravel Redis OM implementation for Laravel with Direct Redis Access and Python Search Fallback",
+    "version": "2.0.0",
+    "description": "Laravel Redis OM — Pure PHP implementation with direct RediSearch support. No Python required.",
     "type": "library",
     "license": "proprietary",
     "homepage": "https://github.com/masan27/laravel-redis-om",
@@ -17,8 +17,7 @@
         "php": "^8.3",
         "illuminate/support": "^11.0|^12.0",
         "illuminate/redis": "^11.0|^12.0",
-        "illuminate/pagination": "^11.0|^12.0",
-        "illuminate/http": "^11.0|^12.0"
+        "illuminate/pagination": "^11.0|^12.0"
     },
     "extra": {
         "laravel": {

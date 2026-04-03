@@ -2,24 +2,19 @@
 
 namespace Masan27\LaravelRedisOM;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use Carbon\Carbon;
 
 class RedisModel
 {
-    protected string $baseUrl;
     protected array $relations = [];
     protected string $connection;
-    protected int $timeout;
 
     public function __construct()
     {
-        $this->baseUrl = config('redis_om.url', 'http://redis-om:8000');
-        $this->relations = config('redis_om.relations', []);
+        $this->relations  = config('redis_om.relations', []);
         $this->connection = config('redis_om.connection', 'default');
-        $this->timeout = config('redis_om.timeout', 30);
     }
 
     /**
@@ -42,18 +37,18 @@ class RedisModel
      * Define a relationship between models (Runtime definition)
      */
     public function defineRelation(
-        string $model, 
-        string $name, 
-        string $type, 
-        string $relatedModel, 
-        string $foreignKey, 
+        string $model,
+        string $name,
+        string $type,
+        string $relatedModel,
+        string $foreignKey,
         string $localKey = 'id'
     ): void {
         $this->relations[$model][$name] = [
-            'type' => $type,
-            'related' => $relatedModel,
+            'type'        => $type,
+            'related'     => $relatedModel,
             'foreign_key' => $foreignKey,
-            'local_key' => $localKey,
+            'local_key'   => $localKey,
         ];
     }
 
@@ -64,20 +59,17 @@ class RedisModel
     public function getRelations(string $model, ?string $modelClass = null): array
     {
         $configRelations = $this->relations[$model] ?? [];
-        $classRelations = [];
+        $classRelations  = [];
 
         if ($modelClass && class_exists($modelClass)) {
             try {
-                // We use reflection or just instantiate to get the protected property
-                // Since it's protected, we can access it if we're in the same hierarchy, 
-                // but RedisModel is not. We'll use a temporary instance or reflection.
-                $instance = new $modelClass();
+                $instance  = new $modelClass();
                 $reflector = new \ReflectionClass($instance);
-                $property = $reflector->getProperty('relations');
+                $property  = $reflector->getProperty('relations');
                 $property->setAccessible(true);
                 $classRelations = $property->getValue($instance);
             } catch (\Exception $e) {
-                // If it fails (e.g. no property), just ignore
+                // ignore
             }
         }
 
@@ -85,57 +77,295 @@ class RedisModel
     }
 
     /**
-     * Raw query model with dynamic filters (Backend API)
+     * Get the indexed fields for a model class.
+     * Used to validate that queried fields are actually indexed.
      */
-    public function rawQuery(
-        string $model, 
-        array $filters = [], 
-        ?int $limit = null, 
-        ?int $offset = null,
-        ?string $sortBy = null,
-        bool $sortAsc = true,
-        ?array $fields = null
-    ): array {
-        try {
-            $response = Http::timeout($this->timeout)->post("{$this->baseUrl}/query", [
-                'model' => $model,
-                'filters' => $filters,
-                'limit' => $limit,
-                'offset' => $offset,
-                'sort_by' => $sortBy,
-                'sort_asc' => $sortAsc,
-                'fields' => $fields,
-            ]);
+    public function getIndexedFields(?string $modelClass): array
+    {
+        if (!$modelClass || !class_exists($modelClass)) {
+            return [];
+        }
 
-            if ($response->failed()) {
-                Log::error("RedisOM Query Failed: " . $response->body());
-                return ['data' => [], 'total' => 0, 'error' => $response->json('detail')];
+        try {
+            $instance  = new $modelClass();
+            $reflector = new \ReflectionClass($instance);
+
+            if (!$reflector->hasProperty('index')) {
+                return [];
             }
 
-            return $response->json();
+            $property = $reflector->getProperty('index');
+            $property->setAccessible(true);
+            return $property->getValue($instance);
         } catch (\Exception $e) {
-            Log::error("RedisOM Connection Error: " . $e->getMessage());
-            return ['data' => [], 'total' => 0, 'error' => $e->getMessage()];
+            return [];
         }
     }
 
     /**
-     * Health check of the Redis Service
-     * 
-     * @return bool
+     * Resolve index name for a model.
+     * e.g. "User" → "users:index"
      */
-    public function health(): bool
+    public function resolveIndexName(string $model): string
     {
+        return app(IndexManager::class)->resolveIndexName($model);
+    }
+
+    /**
+     * Get the index type for a specific field.
+     * Returns e.g. "NUMERIC SORTABLE", "TEXT", "TAG", or null if not indexed.
+     */
+    protected function getFieldIndexType(string $field, ?string $modelClass): ?string
+    {
+        $indexedFields = $this->getIndexedFields($modelClass);
+        return isset($indexedFields[$field]) ? strtoupper(trim($indexedFields[$field])) : null;
+    }
+
+    /**
+     * Build FT.SEARCH query string from filters array.
+     */
+    protected function buildFtQuery(array $filters, ?string $modelClass = null): string
+    {
+        if (empty($filters)) {
+            return '*';
+        }
+
+        $parts = [];
+
+        foreach ($filters as $filter) {
+            $field = $filter['field'];
+            $op    = $filter['op'];
+            $value = $filter['value'];
+
+            // Validate field is indexed (only when modelClass is known)
+            if ($modelClass) {
+                $indexType = $this->getFieldIndexType($field, $modelClass);
+                if ($indexType === null) {
+                    throw new \Exception(
+                        "Field '{$field}' is not indexed. " .
+                        "Add it to \$index in your model to enable querying."
+                    );
+                }
+            }
+
+            $parts[] = $this->buildCondition($field, $op, $value, $modelClass);
+        }
+
+        return implode(' ', $parts);
+    }
+
+    /**
+     * Build a single FT.SEARCH condition.
+     */
+    protected function buildCondition(string $field, string $op, mixed $value, ?string $modelClass = null): string
+    {
+        $indexType = $this->getFieldIndexType($field, $modelClass) ?? 'TEXT';
+        $isNumeric = str_starts_with($indexType, 'NUMERIC');
+        $isTag     = str_starts_with($indexType, 'TAG');
+        $isTagCase = $indexType === 'TAG_CASE';
+
+        if ($isTagCase && !is_null($value)) {
+            if (is_array($value)) {
+                $value = array_map(fn($v) => strtolower((string) $v), $value);
+            } else {
+                $value = strtolower((string) $value);
+            }
+        }
+
+        switch ($op) {
+            case '=':
+            case '==':
+                if ($isNumeric) {
+                    return "@{$field}:[{$value} {$value}]";
+                }
+                if ($isTag || $isTagCase) {
+                    $escaped = $this->escapeTagValue((string) $value);
+                    return "@{$field}:{{$escaped}}";
+                }
+                // TEXT field: exact match usually requires quoting if multiple words, 
+                // but for single word it's just the word.
+                return "@{$field}:\"{$value}\"";
+
+            case '!=':
+                if ($isNumeric) {
+                    return "-@{$field}:[{$value} {$value}]";
+                }
+                if ($isTag || $isTagCase) {
+                    $escaped = $this->escapeTagValue((string) $value);
+                    return "-@{$field}:{{$escaped}}";
+                }
+                return "-@{$field}:\"{$value}\"";
+
+            case '>':
+                return "@{$field}:[({$value} +inf]";
+
+            case '>=':
+                return "@{$field}:[{$value} +inf]";
+
+            case '<':
+                return "@{$field}:[-inf ({$value}]";
+
+            case '<=':
+                return "@{$field}:[-inf {$value}]";
+
+            case 'between':
+                if (!is_array($value) || count($value) !== 2) {
+                    throw new \Exception("Operator 'between' requires array with 2 values.");
+                }
+                return "@{$field}:[{$value[0]} {$value[1]}]";
+
+            case 'in':
+                if (!is_array($value) || empty($value)) {
+                    throw new \Exception("Operator 'in' requires a non-empty array.");
+                }
+                if ($isNumeric) {
+                    $conditions = array_map(fn($v) => "@{$field}:[{$v} {$v}]", $value);
+                    return '(' . implode('|', $conditions) . ')';
+                }
+                $escaped = array_map(fn($v) => $this->escapeTagValue($v), (array) $value);
+                return "@{$field}:{" . implode('|', $escaped) . "}";
+
+            case '!in':
+                if (!is_array($value) || empty($value)) {
+                    throw new \Exception("Operator '!in' requires a non-empty array.");
+                }
+                if ($isNumeric) {
+                    $conditions = array_map(fn($v) => "-@{$field}:[{$v} {$v}]", $value);
+                    return implode(' ', $conditions);
+                }
+                $escaped = array_map(fn($v) => $this->escapeTagValue($v), (array) $value);
+                return "-@{$field}:{" . implode('|', $escaped) . "}";
+
+            case 'startswith':
+                return "@{$field}:{$value}*";
+
+            case 'null':
+                return "ismissing(@{$field})";
+
+            case 'not_null':
+                return "exists(@{$field})";
+
+            default:
+                throw new \Exception("Operator '{$op}' is not supported.");
+        }
+    }
+
+    /**
+     * Escape special characters for TAG field values.
+     */
+    protected function escapeTagValue(string $value): string
+    {
+        return str_replace(
+            [',', '.', '<', '>', '{', '}', '[', ']', '"', "'", ':', ';', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '+', '=', '~', '|', ' ', '/'],
+            array_map(fn($c) => "\\{$c}", [',', '.', '<', '>', '{', '}', '[', ']', '"', "'", ':', ';', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '+', '=', '~', '|', ' ', '/']),
+            $value
+        );
+    }
+
+    /**
+     * Parse raw FT.SEARCH response into ['data' => [], 'total' => 0].
+     *
+     * FT.SEARCH raw response format:
+     * [total, key1, [field, value, ...], key2, [field, value, ...], ...]
+     */
+    protected function parseFtSearchResult(mixed $raw): array
+    {
+        if (empty($raw) || !is_array($raw)) {
+            return ['data' => [], 'total' => 0];
+        }
+
+        $total = (int) ($raw[0] ?? 0);
+        $docs  = [];
+
+        // Results start at index 1, each doc = [key, fields_array]
+        for ($i = 1; $i < count($raw); $i += 2) {
+            $fieldsRaw = $raw[$i + 1] ?? [];
+
+            // When using RETURN or no RETURN, fields come back differently
+            // With JSON index: fields is array like ['$', '{...json...}']
+            if (is_array($fieldsRaw) && count($fieldsRaw) >= 2) {
+                // Pair-based: [field1, val1, field2, val2, ...]
+                if ($fieldsRaw[0] === '$') {
+                    // Full JSON doc stored under '$'
+                    $decoded = json_decode($fieldsRaw[1], true);
+                    if ($decoded !== null) {
+                        $docs[] = $decoded;
+                        continue;
+                    }
+                }
+
+                // Pair-based fields (RETURN specific fields)
+                $doc = [];
+                for ($j = 0; $j < count($fieldsRaw); $j += 2) {
+                    $key         = $fieldsRaw[$j];
+                    $val         = $fieldsRaw[$j + 1] ?? null;
+                    $doc[$key]   = $val;
+                }
+                $docs[] = $doc;
+            }
+        }
+
+        return ['data' => $docs, 'total' => $total];
+    }
+
+    /**
+     * Execute FT.SEARCH directly against Redis.
+     */
+    public function rawQuery(
+        string $model,
+        array $filters = [],
+        ?int $limit = null,
+        ?int $offset = null,
+        ?string $sortBy = null,
+        bool $sortAsc = true,
+        ?array $fields = null,
+        ?string $modelClass = null
+    ): array {
         try {
-            $response = Http::timeout(2)->get("{$this->baseUrl}/health");
-            return $response->successful() && $response->json('status') === 'ok';
+            $indexName   = $this->resolveIndexName($model);
+            $queryString = $this->buildFtQuery($filters, $modelClass);
+
+            $args = [$indexName, $queryString];
+
+            // RETURN specific fields
+            if ($fields) {
+                $args[] = 'RETURN';
+                $args[] = count($fields);
+                foreach ($fields as $f) {
+                    $args[] = $f;
+                }
+            }
+
+            // SORTBY
+            if ($sortBy) {
+                $args[] = 'SORTBY';
+                $args[] = $sortBy;
+                $args[] = $sortAsc ? 'ASC' : 'DESC';
+            }
+
+            // LIMIT
+            $args[] = 'LIMIT';
+            $args[] = $offset ?? 0;
+            $args[] = $limit ?? 10;
+
+            $raw    = $this->redis()->command('FT.SEARCH', $args);
+            $result = $this->parseFtSearchResult($raw);
+
+            // Strip internal audit fields
+            $result['data'] = array_map(function ($doc) {
+                unset($doc['update_time'], $doc['updated_time']);
+                return $doc;
+            }, $result['data']);
+
+            return $result;
         } catch (\Exception $e) {
-            return false;
+            Log::error("RedisOM FT.SEARCH Error: " . $e->getMessage());
+            return ['data' => [], 'total' => 0, 'error' => $e->getMessage()];
         }
     }
 
     // ─────────────────────────────────────────────
-    // Direct Redis Methods (Bypass HTTP, no gap)
+    // Direct Redis Methods
     // ─────────────────────────────────────────────
 
     /**
@@ -148,31 +378,25 @@ class RedisModel
 
     /**
      * GET value directly from Redis.
-     * Mencoba JSON.GET terlebih dahulu (untuk RedisJSON),
-     * fallback ke plain GET untuk scalar values.
-     * 
-     * @param string $key  Full key tanpa prefix (e.g. 'Model:id')
-     * @return mixed       array|scalar|null
      */
     public function directGet(string $key): mixed
     {
-        // 1. Coba JSON.GET (untuk data array/object)
+        // 1. Try JSON.GET
         try {
             $raw = $this->redis()->command('JSON.GET', [$key]);
             if ($raw !== null && $raw !== false) {
                 return json_decode($raw, true);
             }
         } catch (\Exception $e) {
-            // Bukan RedisJSON key, lanjut ke plain GET
+            // Not a RedisJSON key, fallback
         }
 
-        // 2. Fallback: plain GET (untuk scalar: int, bool, string)
+        // 2. Fallback: plain GET
         try {
             $plain = $this->redis()->get($key);
             if ($plain === null) {
                 return null;
             }
-            // Coba decode JSON (misal: "42", "true"), jika gagal kembalikan as-is
             $decoded = json_decode($plain, true);
             return $decoded ?? $plain;
         } catch (\Exception $e) {
@@ -183,20 +407,11 @@ class RedisModel
 
     /**
      * SET value directly to Redis.
-     * - Array/object: JSON.SET + auto-inject update_time
-     * - Scalar (int, float, bool, string): plain Redis SET
-     * 
-     * @param string $key   Full key tanpa prefix (e.g. 'Model:id')
-     * @param mixed  $value Data (array atau scalar)
-     * @param int|null $ttl TTL dalam detik
-     * @return bool
      */
     public function directSet(string $key, mixed $value, ?int $ttl = null): bool
     {
         try {
             if (is_array($value)) {
-                // Array/object → RedisJSON
-                // Pastikan update_time di atas (audit trail), tapi tetap yang terbaru
                 unset($value['update_time']);
                 $payload = [
                     'update_time' => Carbon::now()->toIso8601String(),
@@ -204,8 +419,6 @@ class RedisModel
                 ];
                 $this->redis()->command('JSON.SET', [$key, '$', json_encode($payload)]);
             } else {
-                // Scalar (int, float, bool, string) → plain Redis SET
-                // bool: simpan sebagai 1/0 supaya portable
                 $stored = is_bool($value) ? (int) $value : $value;
                 $this->redis()->set($key, $stored);
             }
@@ -223,12 +436,6 @@ class RedisModel
 
     /**
      * UPDATE partial fields directly via JSON.SET per path.
-     * RedisJSON atomic per field, RediSearch auto re-index.
-     * 
-     * @param string $key    Full key tanpa prefix (e.g. 'Model:id')
-     * @param array  $fields ['field' => value]
-     * @param int|null $ttl  TTL dalam detik
-     * @return bool
      */
     public function directUpdate(string $key, array $fields, ?int $ttl = null): bool
     {
@@ -237,7 +444,6 @@ class RedisModel
                 $this->redis()->command('JSON.SET', [$key, "\$.{$field}", json_encode($val)]);
             }
 
-            // Selalu update update_time
             $this->redis()->command('JSON.SET', [$key, '$.update_time', json_encode(
                 Carbon::now()->toIso8601String()
             )]);
@@ -255,9 +461,6 @@ class RedisModel
 
     /**
      * DELETE key directly from Redis.
-     * 
-     * @param string $key Full key tanpa prefix (e.g. 'Model:id')
-     * @return bool
      */
     public function directDelete(string $key): bool
     {
@@ -271,126 +474,44 @@ class RedisModel
     }
 
     /**
-     * Perform a mass update on multiple keys using a Redis pipeline.
-     * 
-     * @param string $model
-     * @param array $ids
-     * @param array $fields
-     * @return bool
+     * CHECK if key exists directly in Redis.
      */
-    public function massUpdate(string $model, array $ids, array $fields): bool
+    public function directExists(string $key): bool
     {
         try {
-            $this->redis()->pipeline(function ($pipe) use ($model, $ids, $fields) {
-                $now = Carbon::now()->toIso8601String();
-                
-                foreach ($ids as $id) {
-                    $key = "{$model}:{$id}";
-                    
-                    // Update each field
-                    foreach ($fields as $field => $val) {
-                        $pipe->command('JSON.SET', [$key, "$.{$field}", json_encode($val)]);
-                    }
-                    
-                    // Always update update_time
-                    $pipe->command('JSON.SET', [$key, '$.update_time', json_encode($now)]);
-                }
-            });
-
-            return true;
+            return (bool) $this->redis()->exists($key);
         } catch (\Exception $e) {
-            Log::error("RedisOM massUpdate Error: " . $e->getMessage());
             return false;
         }
     }
 
     /**
-     * Perform a mass delete on multiple keys using a Redis pipeline.
-     * 
-     * @param string $model
-     * @param array $ids
-     * @return bool
+     * Mass insert via pipeline with automatic normalization.
      */
-    public function massDelete(string $model, array $ids): bool
+    public function massInsert(string $model, array $records, ?int $ttl = null, ?string $modelClass = null): bool
     {
         try {
-            $this->redis()->pipeline(function ($pipe) use ($model, $ids) {
-                foreach ($ids as $id) {
-                    $pipe->del("{$model}:{$id}");
-                }
-            });
+            $indexedFields = $this->getIndexedFields($modelClass);
 
-            return true;
-        } catch (\Exception $e) {
-            Log::error("RedisOM massDelete Error: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Perform a transaction (MULTI/EXEC) using a closure.
-     * 
-     * @param callable $callback
-     * @return mixed
-     */
-    public function transaction(callable $callback): mixed
-    {
-        return $this->redis()->transaction($callback);
-    }
-
-    /**
-     * Start a new Redis transaction (MULTI).
-     */
-    public function beginTransaction(): void
-    {
-        $this->redis()->multi();
-    }
-
-    /**
-     * Commit the current Redis transaction (EXEC).
-     * 
-     * @return array|bool
-     */
-    public function commit(): array|bool
-    {
-        return $this->redis()->exec();
-    }
-
-    /**
-     * Rollback (Discard) the current Redis transaction (DISCARD).
-     */
-    public function rollBack(): void
-    {
-        $this->redis()->discard();
-    }
-
-    /**
-     * Perform a mass insert/save on multiple records using a Redis pipeline.
-     * Each record must have an 'id' or 'pk' field.
-     * 
-     * @param string $model
-     * @param array $records
-     * @param int|null $ttl
-     * @return bool
-     */
-    public function massInsert(string $model, array $records, ?int $ttl = null): bool
-    {
-        try {
-            $this->redis()->pipeline(function ($pipe) use ($model, $records, $ttl) {
+            $this->redis()->pipeline(function ($pipe) use ($model, $records, $ttl, $indexedFields) {
                 $now = Carbon::now()->toIso8601String();
-                
+
                 foreach ($records as $record) {
                     $id = $record['id'] ?? $record['pk'] ?? null;
                     if (!$id) continue;
 
-                    $key = "{$model}:{$id}";
-                    
-                    // Inject update_time
+                    $key = app(IndexManager::class)->resolveKeyPrefix($model) . $id;
                     unset($record['update_time']);
-                    $payload = [
-                        'update_time' => $now,
-                        ...$record,
-                    ];
+                    
+                    // Normalization
+                    foreach ($indexedFields as $field => $type) {
+                        $type = strtoupper(trim($type));
+                        if ($type === 'TAG_CASE' && isset($record[$field])) {
+                            $record["_ci_{$field}"] = strtolower((string) $record[$field]);
+                        }
+                    }
+
+                    $payload = ['update_time' => $now, ...$record];
 
                     $pipe->command('JSON.SET', [$key, '$', json_encode($payload)]);
 
@@ -408,17 +529,89 @@ class RedisModel
     }
 
     /**
-     * CHECK if key exists directly in Redis.
-     * 
-     * @param string $key Full key tanpa prefix (e.g. 'Model:id')
-     * @return bool
+     * Mass update via pipeline.
      */
-    public function directExists(string $key): bool
+    public function massUpdate(string $model, array $ids, array $fields, ?string $modelClass = null): bool
     {
         try {
-            return (bool) $this->redis()->exists($key);
+            $indexedFields = $this->getIndexedFields($modelClass);
+
+            $this->redis()->pipeline(function ($pipe) use ($model, $ids, $fields, $indexedFields) {
+                $now = Carbon::now()->toIso8601String();
+
+                foreach ($ids as $id) {
+                    $key = app(IndexManager::class)->resolveKeyPrefix($model) . $id;
+
+                    foreach ($fields as $field => $val) {
+                        $pipe->command('JSON.SET', [$key, "$.{$field}", json_encode($val)]);
+
+                        // Normalization update if needed
+                        $type = isset($indexedFields[$field]) ? strtoupper(trim($indexedFields[$field])) : null;
+                        if ($type === 'TAG_CASE') {
+                            $pipe->command('JSON.SET', [$key, "$._ci_{$field}", json_encode(strtolower((string) $val))]);
+                        }
+                    }
+
+                    $pipe->command('JSON.SET', [$key, '$.update_time', json_encode($now)]);
+                }
+            });
+
+            return true;
         } catch (\Exception $e) {
+            Log::error("RedisOM massUpdate Error: " . $e->getMessage());
             return false;
         }
+    }
+
+    /**
+     * Mass delete via pipeline.
+     */
+    public function massDelete(string $model, array $ids): bool
+    {
+        try {
+            $this->redis()->pipeline(function ($pipe) use ($model, $ids) {
+                foreach ($ids as $id) {
+                    $key = app(IndexManager::class)->resolveKeyPrefix($model) . $id;
+                    $pipe->del($key);
+                }
+            });
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error("RedisOM massDelete Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Transaction via closure.
+     */
+    public function transaction(callable $callback): mixed
+    {
+        return $this->redis()->transaction($callback);
+    }
+
+    /**
+     * Begin Redis transaction (MULTI).
+     */
+    public function beginTransaction(): void
+    {
+        $this->redis()->multi();
+    }
+
+    /**
+     * Commit Redis transaction (EXEC).
+     */
+    public function commit(): array|bool
+    {
+        return $this->redis()->exec();
+    }
+
+    /**
+     * Rollback Redis transaction (DISCARD).
+     */
+    public function rollBack(): void
+    {
+        $this->redis()->discard();
     }
 }

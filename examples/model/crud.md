@@ -59,15 +59,6 @@ $user->name = 'Sian Updated';
 $user->save();
 ```
 
-### Partial Atomic Update
-Updates only specific fields without loading the whole object. Best for performance and avoiding race conditions.
-```php
-User::update('User:1', [
-    'role' => 'superadmin',
-    'last_login' => now()->toIso8601String()
-]);
-```
-
 ### Mass Update (Multi-records)
 Update multiple records matching a query criteria.
 ```php
@@ -82,11 +73,6 @@ User::where('role', 'admin')->update(['role' => 'superadmin']);
 ```php
 $user = User::find(1);
 $user->delete();
-```
-
-### Static Delete
-```php
-User::drop('User:1');
 ```
 
 ### Mass Delete (Multi-records)

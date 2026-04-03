@@ -9,15 +9,11 @@ class InstallCommand extends Command
 {
     /**
      * The name and signature of the console command.
-     *
-     * @var string
      */
     protected $signature = 'redis-om:install';
 
     /**
      * The console command description.
-     *
-     * @var string
      */
     protected $description = 'Complete the installation of Laravel Redis OM package';
 
@@ -27,14 +23,18 @@ class InstallCommand extends Command
     public function handle(): void
     {
         $this->info('Installing Laravel Redis OM...');
+        $this->newLine();
 
-        // 1. Publish Configuration
         $this->publishConfig();
-
-        // 2. Update .env file
         $this->updateEnvFile();
 
-        $this->info('Laravel Redis OM installation completed successfully!');
+        $this->newLine();
+        $this->info('Installation complete!');
+        $this->newLine();
+        $this->line('Next steps:');
+        $this->line('  1. Define your models in <fg=cyan>app/Models/Redis/</> extending <fg=cyan>RedisOM</>');
+        $this->line('  2. Add <fg=cyan>protected array $index</> to each model with fields to index');
+        $this->line('  3. Run <fg=cyan>php artisan redis-om:migrate</> to create RediSearch indexes');
     }
 
     /**
@@ -45,8 +45,8 @@ class InstallCommand extends Command
         $this->info('Publishing configuration...');
 
         $this->call('vendor:publish', [
-            '--provider' => "Masan27\LaravelRedisOM\RedisOMServiceProvider",
-            '--tag'      => "redis-om-config"
+            '--provider' => "Masan27\\LaravelRedisOM\\RedisOMServiceProvider",
+            '--tag'      => 'redis-om-config',
         ]);
     }
 
@@ -60,32 +60,28 @@ class InstallCommand extends Command
         $envFile = base_path('.env');
 
         if (!File::exists($envFile)) {
-            $this->warn('.env file not found. Please manually add the following variables:');
-            $this->line('REDIS_OM_URL=http://redis-om:8000');
+            $this->warn('.env file not found. Please manually add:');
             $this->line('REDIS_OM_CONNECTION=default');
-            $this->line('REDIS_OM_TIMEOUT=30');
             return;
         }
 
         $content = File::get($envFile);
 
         $variables = [
-            'REDIS_OM_URL'        => 'http://redis-om:8000',
             'REDIS_OM_CONNECTION' => 'default',
-            'REDIS_OM_TIMEOUT'    => '30',
         ];
 
         $appended = false;
         foreach ($variables as $key => $value) {
             if (!str_contains($content, "{$key}=")) {
-                $content .= "\n{$key}={$value}";
-                $appended = true;
+                $content  .= "\n{$key}={$value}";
+                $appended  = true;
             }
         }
 
         if ($appended) {
             File::put($envFile, $content);
-            $this->info('Added missing Redis OM variables to .env');
+            $this->info('Added Redis OM variables to .env');
         } else {
             $this->info('Redis OM variables already exist in .env');
         }

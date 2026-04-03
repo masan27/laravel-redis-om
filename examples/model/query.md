@@ -1,6 +1,6 @@
 # Querying & Pagination (Model Style)
 
-Advanced queries use the `query()` entry point, which communicates with the Python backend for RediSearch capabilities.
+Advanced queries use the `query()` entry point, which provides full RediSearch capabilities.
 
 ## 1. Basic Filtering
 
@@ -27,9 +27,9 @@ $users = User::query()->whereBetween('price', [100, 500])->get();
 
 ## 2. Advanced Search
 
-### Contains (Full-text)
+### Matches
 ```php
-$products = Product::query()->whereContains('description', 'modern laptop')->get();
+$products = Product::query()->where('description', 'modern laptop')->get();
 ```
 
 ### Starts With (Prefix)

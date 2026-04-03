@@ -3,25 +3,51 @@
 return [
     /*
     |--------------------------------------------------------------------------
-    | RedisOM Backend URL
+    | Redis Connection
     |--------------------------------------------------------------------------
     |
-    | The URL of your Python RedisOM microservice.
+    | The Redis connection name to use (from config/database.php).
     |
     */
-    'url'        => env('REDIS_OM_URL', 'http://redis-om:8000'),
     'connection' => env('REDIS_OM_CONNECTION', 'default'),
-    'timeout'    => env('REDIS_OM_TIMEOUT', 30),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Model Path
+    |--------------------------------------------------------------------------
+    |
+    | Directory to scan when running `php artisan redis-om:migrate`.
+    | All classes extending RedisOM in this path will be migrated.
+    |
+    */
+    'model_path' => app_path('Models/Redis'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Index Suffix
+    |--------------------------------------------------------------------------
+    |
+    | Suffix appended to the index name.
+    | e.g. User → "users:index"
+    |
+    */
+    'index_suffix' => 'index',
 
     /*
     |--------------------------------------------------------------------------
     | Model Relations
     |--------------------------------------------------------------------------
     |
-    | Define your cross-model relations here.
+    | Define cross-model relations here, or define them directly in your model.
+    |
     | Example:
     | 'Transaction' => [
-    |     'user' => ['type' => 'hasOne', 'related' => 'User', 'foreign_key' => 'id', 'local_key' => 'user_id'],
+    |     'user' => [
+    |         'type'        => 'hasOne',
+    |         'related'     => 'User',
+    |         'foreign_key' => 'id',
+    |         'local_key'   => 'user_id',
+    |     ],
     | ],
     |
     */

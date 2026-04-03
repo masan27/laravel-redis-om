@@ -18,9 +18,9 @@ $results = RedisOM::query('Product')
 ## 2. Advanced Search
 
 ```php
-// Full-text search
+// Full-text match
 $results = RedisOM::query('Article')
-    ->whereContains('content', 'laravel redis')
+    ->where('content', 'laravel redis')
     ->get();
 
 // Prefix search

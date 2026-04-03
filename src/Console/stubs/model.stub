@@ -7,6 +7,27 @@ use Masan27\LaravelRedisOM\RedisOM;
 class {{ class }} extends RedisOM
 {
     /**
+     * Fields to index in RediSearch.
+     * Only indexed fields can be used in where() queries.
+     *
+     * Supported types:
+     *   TEXT            — full-text search (supports match, prefix, whereLike)
+     *   TEXT SORTABLE   — full-text search + sortable via orderBy()
+     *   TAG             — exact match, enum, boolean (supports ==, !=, in, !in)
+     *   TAG SORTABLE    — exact match + sortable via orderBy()
+     *   NUMERIC         — number, sortable by default (supports ==, !=, >, <, >=, <=, between)
+     *   GEO             — geo coordinates
+     *
+     * @var array
+     */
+    protected array $index = [
+        // 'name'       => 'TEXT',
+        // 'email'      => 'TAG',
+        // 'age'        => 'NUMERIC',
+        // 'is_active'  => 'TAG',
+    ];
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array
@@ -17,32 +38,25 @@ class {{ class }} extends RedisOM
     // ];
 
     /**
-     * The attributes that aren't mass assignable.
-     *
-     * @var array
-     */
-    // protected array $guarded = ['*'];
-
-    /**
      * The attributes that should be cast.
      *
      * @var array
      */
     // protected array $casts = [
     //     'last_login' => 'datetime',
-    //     'is_active' => 'boolean',
+    //     'is_active'  => 'boolean',
     // ];
 
     /**
      * The model's relations.
-     * 
+     *
      * @var array
      */
     // protected array $relations = [
     //     'profile' => [
-    //         'type' => 'hasOne',
-    //         'related' => 'Profile',
-    //         'local_key' => 'id',
+    //         'type'        => 'hasOne',
+    //         'related'     => 'Profile',
+    //         'local_key'   => 'id',
     //         'foreign_key' => 'user_id',
     //     ],
     // ];

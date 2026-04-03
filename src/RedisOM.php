@@ -53,6 +53,16 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     protected array $relations = [];
 
     /**
+     * Fields to index in RediSearch.
+     * Only fields defined here can be used in where() queries.
+     * 
+     * Supported types: TEXT, TEXT SORTABLE, TAG, TAG SORTABLE, NUMERIC, GEO
+     *
+     * @var array
+     */
+    protected array $index = [];
+
+    /**
      * Get the model name (e.g., 'User').
      */
     public static function getModelName(): string
@@ -82,13 +92,13 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
-     * Find a record by ID.
-     * Langsung dari Redis (JSON.GET) — no HTTP gap.
+     * Find a record by ID directly from Redis (JSON.GET).
      */
     public static function find($id, ?string $modelName = null)
     {
         $modelNameExplicit = $modelName ?: static::getModelName();
-        $key = "{$modelNameExplicit}:{$id}";
+        $indexManager = app(IndexManager::class);
+        $key = $indexManager->resolveKeyPrefix($modelNameExplicit) . $id;
 
         /** @var RedisModel $service */
         $service = app(RedisModel::class);
@@ -127,7 +137,8 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     public static function exists($id, ?string $modelName = null): bool
     {
         $model = $modelName ?: static::getModelName();
-        return app(RedisModel::class)->directExists("{$model}:{$id}");
+        $key   = app(IndexManager::class)->resolveKeyPrefix($model) . $id;
+        return app(RedisModel::class)->directExists($key);
     }
 
     /**
@@ -308,13 +319,11 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
             throw new \Exception("Cannot generate Redis key: Model has no ID (pk/id)");
         }
 
-        $model = static::getModelName();
-        return "{$model}:{$id}";
+        return app(IndexManager::class)->resolveKeyPrefix(static::class) . $id;
     }
 
     /**
-     * Save to Redis.
-     * Langsung via JSON.SET — no HTTP gap.
+     * Save to Redis using JSON.SET.
      */
     public function save(): bool
     {
@@ -324,6 +333,14 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
         // Audit Trail (Redis-side only): updated_time
         $attributes = $this->attributes;
         $attributes['updated_time'] = Carbon::now()->toIso8601String();
+
+        // Automatic Normalization for TAG_CASE
+        foreach ($this->index as $field => $type) {
+            $type = strtoupper(trim($type));
+            if ($type === 'TAG_CASE' && isset($attributes[$field])) {
+                $attributes["_ci_{$field}"] = strtolower((string) $attributes[$field]);
+            }
+        }
 
         $success = $service->directSet($this->getFullKey(), $attributes);
 
@@ -335,8 +352,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
-     * Delete from Redis.
-     * Langsung via DEL — no HTTP gap.
+     * Delete from Redis using DEL.
      */
     public function delete(): bool
     {
@@ -425,7 +441,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
-     * Generic set key — langsung via JSON.SET (array) atau Redis SET (scalar), no HTTP gap.
+     * Generic set key via JSON.SET (array) or Redis SET (scalar).
      */
     public static function set(string $key, mixed $data, ?int $ttl = null): bool
     {
@@ -433,7 +449,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
-     * Generic partial update — langsung via JSON.SET per path, no HTTP gap.
+     * Generic partial update via JSON.SET per path.
      * Atomic per field. RediSearch auto re-index.
      */
     public static function update(string $key, array $fields, ?int $ttl = null): bool
@@ -442,7 +458,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
-     * Generic delete key — langsung via DEL, no HTTP gap.
+     * Generic delete key via DEL.
      */
     public static function drop(string $key): bool
     {
@@ -450,7 +466,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
-     * Generic check key existence — langsung via EXISTS, no HTTP gap.
+     * Generic check key existence via EXISTS.
      */
     public static function has(string $key): bool
     {

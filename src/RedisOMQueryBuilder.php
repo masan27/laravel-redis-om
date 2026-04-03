@@ -6,7 +6,6 @@ use Illuminate\Support\Collection;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\CursorPaginator;
-use Illuminate\Pagination\Cursor;
 
 class RedisOMQueryBuilder
 {
@@ -23,8 +22,8 @@ class RedisOMQueryBuilder
 
     public function __construct(RedisModel $service, string $model, ?string $modelClass = null)
     {
-        $this->service = $service;
-        $this->model = $model;
+        $this->service    = $service;
+        $this->model      = $model;
         $this->modelClass = $modelClass;
     }
 
@@ -34,13 +33,13 @@ class RedisOMQueryBuilder
     public function where(string $field, $operator = null, $value = null): self
     {
         if (func_num_args() === 2) {
-            $value = $operator;
+            $value    = $operator;
             $operator = '=';
         }
 
         $this->filters[] = [
             'field' => $field,
-            'op' => $operator,
+            'op'    => $operator,
             'value' => $value,
         ];
 
@@ -48,85 +47,59 @@ class RedisOMQueryBuilder
     }
 
     /**
-     * Add a whereNull clause to the query.
+     * Add a case-insensitive where clause.
+     * Note: Field must be indexed as 'TAG_CASE' for this to be effective.
+     */
+    public function whereInsensitive(string $field, $value): self
+    {
+        return $this->where($field, '=', $value);
+    }
+
+    /**
+     * Add a whereNull clause.
      */
     public function whereNull(string $field): self
     {
-        $this->filters[] = [
-            'field' => $field,
-            'op' => 'null',
-            'value' => null,
-        ];
-
+        $this->filters[] = ['field' => $field, 'op' => 'null', 'value' => null];
         return $this;
     }
 
     /**
-     * Add a whereNotNull clause to the query.
+     * Add a whereNotNull clause.
      */
     public function whereNotNull(string $field): self
     {
-        $this->filters[] = [
-            'field' => $field,
-            'op' => 'not_null',
-            'value' => null,
-        ];
-
+        $this->filters[] = ['field' => $field, 'op' => 'not_null', 'value' => null];
         return $this;
     }
 
     /**
-     * Add a whereIn clause to the query.
+     * Add a whereIn clause.
      */
     public function whereIn(string $field, array $values): self
     {
-        $this->filters[] = [
-            'field' => $field,
-            'op' => 'in',
-            'value' => $values,
-        ];
-
+        $this->filters[] = ['field' => $field, 'op' => 'in', 'value' => $values];
         return $this;
     }
 
     /**
-     * Add a whereBetween clause to the query.
+     * Add a whereBetween clause.
      */
     public function whereBetween(string $field, array $values): self
     {
-        $this->filters[] = [
-            'field' => $field,
-            'op' => 'between',
-            'value' => $values,
-        ];
-
+        $this->filters[] = ['field' => $field, 'op' => 'between', 'value' => $values];
         return $this;
     }
 
-    /**
-     * Add a whereContains clause to the query (Full-text search).
-     */
-    public function whereContains(string $field, string $value): self
-    {
-        return $this->where($field, 'contains', $value);
-    }
 
     /**
-     * Add a whereStartsWith clause to the query (Prefix search).
+     * Add a whereStartsWith clause.
      */
     public function whereStartsWith(string $field, string $value): self
     {
         return $this->where($field, 'startswith', $value);
     }
 
-    /**
-     * Add a whereEndsWith clause to the query (Suffix search).
-     * Note: Requires SUFFIX_MATCHING on the Redis index.
-     */
-    public function whereEndsWith(string $field, string $value): self
-    {
-        return $this->where($field, 'endswith', $value);
-    }
 
     /**
      * Select specific fields.
@@ -160,7 +133,7 @@ class RedisOMQueryBuilder
      */
     public function orderBy(string $field, string $direction = 'asc'): self
     {
-        $this->sortBy = $field;
+        $this->sortBy  = $field;
         $this->sortAsc = strtolower($direction) === 'asc';
         return $this;
     }
@@ -197,7 +170,7 @@ class RedisOMQueryBuilder
         }
 
         $relatedIdField = $relationDef['type'] === 'hasMany' ? $relationDef['foreign_key'] : 'id';
-        $relatedIds = $relatedBuilder->select($relatedIdField)
+        $relatedIds     = $relatedBuilder->select($relatedIdField)
             ->get()
             ->pluck($relatedIdField)
             ->unique()
@@ -229,7 +202,7 @@ class RedisOMQueryBuilder
         }
 
         $relatedIdField = $relationDef['type'] === 'hasMany' ? $relationDef['foreign_key'] : 'id';
-        $relatedIds = $relatedBuilder->select($relatedIdField)
+        $relatedIds     = $relatedBuilder->select($relatedIdField)
             ->get()
             ->pluck($relatedIdField)
             ->unique()
@@ -237,7 +210,7 @@ class RedisOMQueryBuilder
 
         $this->filters[] = [
             'field' => $relationDef['local_key'],
-            'op' => '!in',
+            'op'    => '!in',
             'value' => $relatedIds,
         ];
 
@@ -245,7 +218,7 @@ class RedisOMQueryBuilder
     }
 
     /**
-     * Execute the query and get results with extra metadata (total).
+     * Execute the query and get results with total metadata.
      */
     public function runQuery(): array
     {
@@ -256,7 +229,8 @@ class RedisOMQueryBuilder
             $this->offset,
             $this->sortBy,
             $this->sortAsc,
-            $this->fields
+            $this->fields,
+            $this->modelClass  // pass modelClass for field validation
         );
 
         $items = collect($response['data'] ?? []);
@@ -272,7 +246,7 @@ class RedisOMQueryBuilder
         }
 
         return [
-            'data' => $items,
+            'data'  => $items,
             'total' => $response['total'] ?? $items->count(),
         ];
     }
@@ -286,12 +260,12 @@ class RedisOMQueryBuilder
     }
 
     /**
-     * Create a new model instance.
+     * Create a new model instance from attributes.
      */
     protected function newModelInstance(array $attributes)
     {
         $model = new $this->modelClass();
-        
+
         if (method_exists($model, 'fill')) {
             $model->fill($attributes);
         } else {
@@ -309,12 +283,11 @@ class RedisOMQueryBuilder
     protected function loadRelations(Collection $items): void
     {
         $relationDefinitions = $this->service->getRelations($this->model, $this->modelClass);
-        $groupedRelations = [];
+        $groupedRelations    = [];
 
-        // Parse nested relations: ['partner.contacts'] -> ['partner' => ['contacts']]
         foreach ($this->with as $relation) {
             if (str_contains($relation, '.')) {
-                [$first, $rest] = explode('.', $relation, 2);
+                [$first, $rest]           = explode('.', $relation, 2);
                 $groupedRelations[$first][] = $rest;
             } else {
                 $groupedRelations[$relation] = $groupedRelations[$relation] ?? [];
@@ -325,9 +298,9 @@ class RedisOMQueryBuilder
             $def = $relationDefinitions[$relationName] ?? null;
             if (!$def) continue;
 
-            $localKey = $def['local_key'];
+            $localKey  = $def['local_key'];
             $foreignKey = $def['foreign_key'];
-            $ids = $items->pluck($localKey)->unique()->filter()->toArray();
+            $ids       = $items->pluck($localKey)->unique()->filter()->toArray();
 
             $query = $this->service->query($def['related'])
                 ->whereIn($def['type'] === 'hasMany' ? $foreignKey : 'id', $ids);
@@ -339,8 +312,10 @@ class RedisOMQueryBuilder
             $relatedItems = $query->get();
 
             foreach ($items as $item) {
-                $keyValue = $item instanceof \ArrayAccess || is_array($item) ? ($item[$localKey] ?? null) : ($item->{$localKey} ?? null);
-                
+                $keyValue = $item instanceof \ArrayAccess || is_array($item)
+                    ? ($item[$localKey] ?? null)
+                    : ($item->{$localKey} ?? null);
+
                 if ($def['type'] === 'hasMany') {
                     $itemsInRelation = $relatedItems->where($foreignKey, $keyValue)->values();
                     if ($item instanceof \ArrayAccess || is_array($item)) {
@@ -361,7 +336,7 @@ class RedisOMQueryBuilder
     }
 
     /**
-     * Paginate the results with total count (SQL-like).
+     * Paginate results with total count.
      */
     public function paginate(int $perPage = 15, int $page = null): LengthAwarePaginator
     {
@@ -381,17 +356,16 @@ class RedisOMQueryBuilder
     }
 
     /**
-     * Paginate the results without total count (Faster).
+     * Simple paginate without total count.
      */
     public function simplePaginate(int $perPage = 15, int $page = null): Paginator
     {
         $page = $page ?: Paginator::resolveCurrentPage();
-        
-        // Fetch one extra to determine if there's a next page
+
         $this->limit($perPage + 1);
         $this->offset(($page - 1) * $perPage);
 
-        $items = $this->get();
+        $items   = $this->get();
         $hasMore = $items->count() > $perPage;
 
         if ($hasMore) {
@@ -404,21 +378,17 @@ class RedisOMQueryBuilder
     }
 
     /**
-     * Cursor paginate the results.
+     * Cursor paginate.
      */
     public function cursorPaginate(int $perPage = 15): CursorPaginator
     {
         $cursor = CursorPaginator::resolveCurrentCursor();
-        
-        // Handling cursor logic depends on sorting field.
-        // For now, this is a simplified version using offset if possible.
-        // In real cases, we'd use the last ID from the cursor.
-        
-        $this->limit($perPage + 1); // Get one extra to see if there's more
-        
+
+        $this->limit($perPage + 1);
+
         $results = $this->get();
         $hasMore = $results->count() > $perPage;
-        
+
         if ($hasMore) {
             $results->pop();
         }
@@ -429,11 +399,7 @@ class RedisOMQueryBuilder
     }
 
     /**
-     * Execute a mass insert of records.
-     * 
-     * @param array $records Array of attribute arrays
-     * @param int|null $ttl
-     * @return bool
+     * Mass insert records.
      */
     public function insert(array $records, ?int $ttl = null): bool
     {
@@ -441,17 +407,15 @@ class RedisOMQueryBuilder
             return false;
         }
 
-        // If it's a single record (not nested), wrap it
         if (!is_array(reset($records))) {
             $records = [$records];
         }
 
-        // Perform mass insert via RedisModel with auto-chunking (1000 per chunk)
-        $chunks = array_chunk($records, 1000);
+        $chunks  = array_chunk($records, 1000);
         $success = true;
 
         foreach ($chunks as $chunk) {
-            if (!$this->service->massInsert($this->model, $chunk, $ttl)) {
+            if (!$this->service->massInsert($this->model, $chunk, $ttl, $this->modelClass)) {
                 $success = false;
             }
         }
@@ -460,26 +424,26 @@ class RedisOMQueryBuilder
     }
 
     /**
-     * Execute a mass update on the matching records.
-     * 
-     * @param array $attributes
-     * @return bool
+     * Mass update matching records.
      */
     public function update(array $attributes): bool
     {
-        // 1. Get all matching IDs (only ID field for efficiency)
-        $ids = $this->select('id')->get()->pluck('id')->toArray();
+        // Try id first, then pk
+        $records = $this->select('id', 'pk')->get();
+        $ids = $records->pluck('id')->filter()->toArray();
+        if (empty($ids)) {
+            $ids = $records->pluck('pk')->filter()->toArray();
+        }
 
         if (empty($ids)) {
             return false;
         }
 
-        // 2. Perform mass update via RedisModel with auto-chunking (1000 per chunk)
-        $chunks = array_chunk($ids, 1000);
+        $chunks  = array_chunk($ids, 1000);
         $success = true;
 
         foreach ($chunks as $chunk) {
-            if (!$this->service->massUpdate($this->model, $chunk, $attributes)) {
+            if (!$this->service->massUpdate($this->model, $chunk, $attributes, $this->modelClass)) {
                 $success = false;
             }
         }
@@ -488,21 +452,22 @@ class RedisOMQueryBuilder
     }
 
     /**
-     * Execute a mass delete on the matching records.
-     * 
-     * @return bool
+     * Mass delete matching records.
      */
     public function delete(): bool
     {
-        // 1. Get all matching IDs
-        $ids = $this->select('id')->get()->pluck('id')->toArray();
+        // Try id first, then pk
+        $records = $this->select('id', 'pk')->get();
+        $ids = $records->pluck('id')->filter()->toArray();
+        if (empty($ids)) {
+            $ids = $records->pluck('pk')->filter()->toArray();
+        }
 
         if (empty($ids)) {
             return false;
         }
 
-        // 2. Perform mass delete via RedisModel with auto-chunking (1000 per chunk)
-        $chunks = array_chunk($ids, 1000);
+        $chunks  = array_chunk($ids, 1000);
         $success = true;
 
         foreach ($chunks as $chunk) {
@@ -515,7 +480,7 @@ class RedisOMQueryBuilder
     }
 
     /**
-     * Get the total count of documents matching the query.
+     * Count matching documents.
      */
     public function count(): int
     {
@@ -523,7 +488,7 @@ class RedisOMQueryBuilder
     }
 
     /**
-     * Get the first result.
+     * Get first result.
      */
     public function first()
     {

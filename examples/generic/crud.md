@@ -24,7 +24,7 @@ $status = RedisOM::find('app:status');
 
 ### Create Single (Object)
 ```php
-RedisOM::set('User:1', [
+RedisOM::set('users:1', [
     'name' => 'Sian',
     'role' => 'admin'
 ]);
@@ -54,7 +54,7 @@ RedisOM::set('is_active', true); // Stored as 1
 
 ### Partial Update
 ```php
-RedisOM::update('User:1', [
+RedisOM::update('users:1', [
     'role' => 'superadmin',
     'last_login' => now()->toIso8601String()
 ]);
@@ -73,7 +73,7 @@ RedisOM::query('User')
 
 ### Delete Key
 ```php
-RedisOM::drop('User:1');
+RedisOM::drop('users:1');
 ```
 
 ### Mass Delete
@@ -87,7 +87,7 @@ RedisOM::query('User')
 
 ## 5. Check Existence
 ```php
-if (RedisOM::has('User:1')) {
+if (RedisOM::has('users:1')) {
     // ...
 }
 ```

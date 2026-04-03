@@ -16,6 +16,10 @@ class RedisOMServiceProvider extends ServiceProvider
         $this->app->scoped(RedisModel::class, function ($app) {
             return new RedisModel();
         });
+
+        $this->app->scoped(IndexManager::class, function ($app) {
+            return new IndexManager();
+        });
     }
 
     /**
@@ -31,6 +35,7 @@ class RedisOMServiceProvider extends ServiceProvider
             $this->commands([
                 Console\InstallCommand::class,
                 Console\ModelMakeCommand::class,
+                Console\MigrateCommand::class,
             ]);
         }
     }
