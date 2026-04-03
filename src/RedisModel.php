@@ -5,6 +5,7 @@ namespace Masan27\LaravelRedisOM;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use Carbon\Carbon;
+use Illuminate\Support\Str;
 
 class RedisModel
 {
@@ -525,12 +526,18 @@ class RedisModel
         try {
             $indexedFields = $this->getIndexedFields($modelClass);
 
-            $this->redis()->pipeline(function ($pipe) use ($model, $records, $ttl, $indexedFields) {
+            $idField = $modelClass ? app(IndexManager::class)->getPrimaryKeyField($modelClass) : null;
+
+            $this->redis()->pipeline(function ($pipe) use ($model, $records, $ttl, $indexedFields, $idField) {
                 $now = Carbon::now()->toIso8601String();
 
                 foreach ($records as $record) {
-                    $id = $record['id'] ?? $record['pk'] ?? null;
-                    if (!$id) continue;
+                    $id = $idField ? ($record[$idField] ?? null) : ($record['id'] ?? $record['pk'] ?? null);
+                    
+                    if (!$id) {
+                        $id = (string) Str::uuid();
+                        $record[$idField ?: 'id'] = $id;
+                    }
 
                     $key = app(IndexManager::class)->resolveKeyPrefix($model) . $id;
                     unset($record['_updated_time'], $record['updated_time'], $record['update_time']);

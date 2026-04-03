@@ -11,6 +11,7 @@ class {{ class }} extends RedisOM
      * Only indexed fields can be used in where() queries.
      *
      * Supported types:
+     *   ID              — mark as the primary key (identifier) for the Redis key structure
      *   TEXT            — full-text search (supports match, prefix, whereLike)
      *   TEXT SORTABLE   — full-text search + sortable via orderBy()
      *   TAG             — exact match, enum, boolean (supports ==, !=, in, !in)
@@ -23,11 +24,14 @@ class {{ class }} extends RedisOM
      * @var array
      */
     protected array $index = [
+        // 'id'         => 'ID',
         // 'name'       => 'TEXT',
         // 'email'      => 'TAG_CASE',
         // 'age'        => 'NUMERIC',
         // 'created_at' => 'DATE',
     ];
+
+     // protected array $guarded = ['id'];
 
     /**
      * Override Redis key prefix.

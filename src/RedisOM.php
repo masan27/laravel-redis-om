@@ -31,12 +31,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
      */
     protected array $fillable = [];
 
-    /**
-     * The attributes that aren't mass assignable.
-     * 
-     * @var array
-     */
-    protected array $guarded = ['*'];
+    protected array $guarded = [];
 
     /**
      * The attributes that should be cast.
@@ -335,10 +330,11 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
      */
     public function getFullKey(): string
     {
-        $id = $this->getAttribute('pk') ?? $this->getAttribute('id') ?? null;
+        $idField = app(IndexManager::class)->getPrimaryKeyField(static::class);
+        $id      = $idField ? $this->getAttribute($idField) : ($this->getAttribute('pk') ?? $this->getAttribute('id'));
 
         if (!$id) {
-            throw new \Exception("Cannot generate Redis key: Model has no ID (pk/id)");
+            throw new \Exception("Cannot generate Redis key: Model has no ID (" . ($idField ?: "pk/id") . ")");
         }
 
         return app(IndexManager::class)->resolveKeyPrefix(static::class) . $id;
@@ -351,6 +347,17 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     {
         /** @var RedisModel $service */
         $service = app(RedisModel::class);
+        $idManager = app(IndexManager::class);
+
+        // Auto-generate ID if missing
+        $idField = $idManager->getPrimaryKeyField(static::class);
+        $id      = $idField ? $this->getAttribute($idField) : ($this->getAttribute('pk') ?? $this->getAttribute('id'));
+
+        if (!$id) {
+            $targetField = $idField ?: 'id';
+            $id = (string) Str::uuid();
+            $this->setAttribute($targetField, $id);
+        }
 
         // Audit Trail (Redis-side only): _updated_time
         $attributes = $this->attributes;
@@ -401,7 +408,10 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
      */
     public function updateModel(array $attributes = []): bool
     {
-        if (!$this->exists($this->getAttribute('id') ?? $this->getAttribute('pk'))) {
+        $idField = app(IndexManager::class)->getPrimaryKeyField(static::class);
+        $id      = $idField ? $this->getAttribute($idField) : ($this->getAttribute('id') ?? $this->getAttribute('pk'));
+
+        if (!$id || !$this->exists($id)) {
             return false;
         }
 

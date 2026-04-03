@@ -146,11 +146,36 @@ class IndexManager
     }
 
     /**
+     * Get the field marked as 'ID' in the model's schema.
+     * 
+     * @param string $modelClass
+     * @return string|null
+     * @throws \Exception
+     */
+    public function getPrimaryKeyField(string $modelClass): ?string
+    {
+        $schema = $this->resolveSchema($modelClass);
+        $idFields = [];
+
+        foreach ($schema as $field => $type) {
+            if (strtoupper(trim($type)) === 'ID') {
+                $idFields[] = $field;
+            }
+        }
+
+        if (count($idFields) > 1) {
+            throw new \Exception("Model '{$modelClass}' has multiple 'ID' fields defined. Only one 'ID' field is supported.");
+        }
+
+        return $idFields[0] ?? null;
+    }
+
+    /**
      * Validate schema types.
      */
     protected function validateSchema(array $schema, string $modelClass): void
     {
-        $validTypes = ['TEXT', 'TEXT SORTABLE', 'TAG', 'TAG SORTABLE', 'TAG_CASE', 'DATE', 'DATETIME', 'NUMERIC', 'NUMERIC SORTABLE', 'GEO'];
+        $validTypes = ['TEXT', 'TEXT SORTABLE', 'TAG', 'TAG SORTABLE', 'TAG_CASE', 'DATE', 'DATETIME', 'NUMERIC', 'NUMERIC SORTABLE', 'GEO', 'ID'];
 
         foreach ($schema as $field => $type) {
             $baseType = strtoupper(trim($type));
