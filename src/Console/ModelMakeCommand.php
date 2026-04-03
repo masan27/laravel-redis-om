@@ -13,7 +13,7 @@ class ModelMakeCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'redis_om:model {name : The name of the Redis model}';
+    protected $signature = 'redis-om:model {name : The name of the Redis model}';
 
     /**
      * The console command description.

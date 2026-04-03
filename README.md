@@ -28,8 +28,6 @@ php artisan redis-om:install
 
 This command will publish the `config/redis_om.php` file and add necessary environment variables to your `.env`.
 
-### redis_om.php
-
 ```php
 return [
     'connection'   => env('REDIS_OM_CONNECTION', 'default'),
@@ -37,6 +35,21 @@ return [
     'index_suffix' => 'index',
 ];
 ```
+
+## Creating Models
+
+You can quickly generate a new Redis OM model class using the following artisan command:
+
+```bash
+php artisan redis-om:model {name}
+```
+
+**Example:**
+```bash
+php artisan redis-om:model User
+```
+
+This will create `app/Models/Redis/User.php`. You can also use subdirectories: `php artisan redis-om:model Products/Electronic`.
 
 ## Migrating Indexes
 

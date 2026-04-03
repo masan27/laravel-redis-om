@@ -32,8 +32,8 @@ class InstallCommand extends Command
         $this->info('Installation complete!');
         $this->newLine();
         $this->line('Next steps:');
-        $this->line('  1. Define your models in <fg=cyan>app/Models/Redis/</> extending <fg=cyan>RedisOM</>');
-        $this->line('  2. Add <fg=cyan>protected array $index</> to each model with fields to index');
+        $this->line('  1. Create your first model: <fg=cyan>php artisan redis-om:model {Name}</>');
+        $this->line('  2. Define <fg=cyan>protected array $index</> in your model for fields you want to search');
         $this->line('  3. Run <fg=cyan>php artisan redis-om:migrate</> to create RediSearch indexes');
     }
 
