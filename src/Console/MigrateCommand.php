@@ -138,7 +138,16 @@ class MigrateCommand extends Command
             }
 
             if ($newHost) {
-                $this->warn("Connection to Redis at '{$host}' failed. Trying fallback host '{$newHost}'...");
+                // Only try fallback if the DNS is resolvable on this system
+                if (gethostbyname($newHost) === $newHost) {
+                     // Not resolvable (gethostbyname returns the host if it fails)
+                     $this->error("Connection to Redis at '{$host}' failed.");
+                     $this->error($e->getMessage());
+                     return false;
+                }
+
+                $port = config("database.redis.{$connectionName}.port", 6379);
+                $this->warn("Connection to Redis at '{$host}:{$port}' failed. Trying fallback host '{$newHost}:{$port}'...");
                 
                 // Dynamically update config
                 config()->set("database.redis.{$connectionName}.host", $newHost);
@@ -148,10 +157,10 @@ class MigrateCommand extends Command
 
                 try {
                     Redis::connection($connectionName)->command('PING');
-                    $this->info("Successfully connected to Redis using fallback host '{$newHost}'.");
+                    $this->info("Successfully connected to Redis using fallback host '{$newHost}:{$port}'.");
                     return true;
                 } catch (\Exception $e2) {
-                    $this->error("Connection to Redis failed on both '{$host}' and '{$newHost}'.");
+                    $this->error("Connection to Redis failed on both '{$host}' and '{$newHost}' port {$port}.");
                     $this->error($e2->getMessage());
                     return false;
                 }
