@@ -356,7 +356,7 @@ class RedisModel
             $args[] = $offset ?? 0;
             $args[] = $limit ?? 10;
 
-            $raw    = $this->redis()->command('FT.SEARCH', $args);
+            $raw    = $this->executeRaw(array_merge(['FT.SEARCH'], $args));
             $result = $this->parseFtSearchResult($raw);
 
             // Strip internal audit fields
@@ -385,13 +385,33 @@ class RedisModel
     }
 
     /**
+     * Execute a raw Redis command, compatible with both Predis and PhpRedis.
+     * Needed because command names like 'FT.SEARCH' and 'JSON.GET' contain
+     * dots which are not valid PHP method names and break ->command().
+     */
+    protected function executeRaw(array $args): mixed
+    {
+        $client = $this->redis()->client();
+
+        // Duck typing: Predis has executeRaw(), PhpRedis has rawCommand()
+        // Avoids instanceof \Predis\Client which requires Predis to be installed.
+        if (method_exists($client, 'executeRaw')) {
+            return $client->executeRaw($args);
+        }
+
+        // PhpRedis
+        $cmd = array_shift($args);
+        return $client->rawCommand($cmd, ...$args);
+    }
+
+    /**
      * GET value directly from Redis.
      */
     public function directGet(string $key): mixed
     {
         // 1. Try JSON.GET
         try {
-            $raw = $this->redis()->command('JSON.GET', [$key]);
+            $raw = $this->executeRaw(['JSON.GET', $key]);
             if ($raw !== null && $raw !== false) {
                 return json_decode($raw, true);
             }
@@ -425,7 +445,7 @@ class RedisModel
                     'update_time' => Carbon::now()->toIso8601String(),
                     ...$value,
                 ];
-                $this->redis()->command('JSON.SET', [$key, '$', json_encode($payload)]);
+                $this->executeRaw(['JSON.SET', $key, '$', json_encode($payload)]);
             } else {
                 $stored = is_bool($value) ? (int) $value : $value;
                 $this->redis()->set($key, $stored);
@@ -449,10 +469,10 @@ class RedisModel
     {
         try {
             foreach ($fields as $field => $val) {
-                $this->redis()->command('JSON.SET', [$key, "\$.{$field}", json_encode($val)]);
+                $this->executeRaw(['JSON.SET', $key, "\$.{$field}", json_encode($val)]);
             }
 
-            $this->redis()->command('JSON.SET', [$key, '$.update_time', json_encode(
+            $this->executeRaw(['JSON.SET', $key, '$.update_time', json_encode(
                 Carbon::now()->toIso8601String()
             )]);
 
@@ -528,7 +548,7 @@ class RedisModel
 
                     $payload = ['update_time' => $now, ...$record];
 
-                    $pipe->command('JSON.SET', [$key, '$', json_encode($payload)]);
+                    $pipe->rawCommand('JSON.SET', $key, '$', json_encode($payload));
 
                     if ($ttl) {
                         $pipe->expire($key, $ttl);
@@ -558,23 +578,23 @@ class RedisModel
                     $key = app(IndexManager::class)->resolveKeyPrefix($model) . $id;
 
                     foreach ($fields as $field => $val) {
-                        $pipe->command('JSON.SET', [$key, "$.{$field}", json_encode($val)]);
+                        $pipe->rawCommand('JSON.SET', $key, "$.{$field}", json_encode($val));
 
                         // Normalization update if needed
                         $type   = isset($indexedFields[$field]) ? strtoupper(trim($indexedFields[$field])) : null;
                         $isDate = ($type === 'DATE' || $type === 'DATETIME');
 
                         if ($type === 'TAG_CASE') {
-                            $pipe->command('JSON.SET', [$key, "$._ci_{$field}", json_encode(strtolower((string) $val))]);
+                            $pipe->rawCommand('JSON.SET', $key, "$._ci_{$field}", json_encode(strtolower((string) $val)));
                         }
 
                         if ($isDate) {
                             $ts = $val instanceof \DateTimeInterface ? $val->getTimestamp() : Carbon::parse($val)->timestamp;
-                            $pipe->command('JSON.SET', [$key, "$._ts_{$field}", json_encode($ts)]);
+                            $pipe->rawCommand('JSON.SET', $key, "$._ts_{$field}", json_encode($ts));
                         }
                     }
 
-                    $pipe->command('JSON.SET', [$key, '$.update_time', json_encode($now)]);
+                    $pipe->rawCommand('JSON.SET', $key, '$.update_time', json_encode($now));
                 }
             });
 

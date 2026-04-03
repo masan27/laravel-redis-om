@@ -31,7 +31,6 @@ This command will publish the `config/redis_om.php` file and add necessary envir
 ```php
 return [
     'connection'   => env('REDIS_OM_CONNECTION', 'default'),
-    'model_path'   => app_path('Models/Redis'),
     'index_suffix' => 'index',
 ];
 ```
@@ -49,7 +48,7 @@ php artisan redis-om:model {name}
 php artisan redis-om:model User
 ```
 
-This will create `app/Models/Redis/User.php`. You can also use subdirectories: `php artisan redis-om:model Products/Electronic`.
+This will create `app/Models/RedisOM/User.php`. You can also use subdirectories: `php artisan redis-om:model Products/Electronic`.
 
 ## Migrating Indexes
 
@@ -66,7 +65,7 @@ Use `--force` to drop and recreate existing indexes.
 ### Defining a Model
 
 ```php
-namespace App\Models\Redis;
+namespace App\Models\RedisOM;
 
 use Masan27\LaravelRedisOM\RedisOM;
 

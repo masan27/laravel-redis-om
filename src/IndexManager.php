@@ -26,21 +26,58 @@ class IndexManager
     }
 
     /**
+     * Execute a raw Redis command, compatible with both Predis and PhpRedis.
+     * Needed because command names like 'FT.INFO' contain dots which are not
+     * valid PHP method names and break ->command() on some drivers.
+     */
+    protected function executeRaw(array $args): mixed
+    {
+        $client = $this->redis()->client();
+
+        // Duck typing: Predis has executeRaw(), PhpRedis has rawCommand()
+        // Avoids instanceof \Predis\Client which requires Predis to be installed.
+        if (method_exists($client, 'executeRaw')) {
+            return $client->executeRaw($args);
+        }
+
+        // PhpRedis
+        $cmd = array_shift($args);
+        return $client->rawCommand($cmd, ...$args);
+    }
+
+    /**
      * Resolve index name for a model.
-     * e.g. User → "users:index"
+     * If the model class has a $keyPrefix property, derive from that.
+     * Otherwise auto-generate: e.g. User → "users:index"
      */
     public function resolveIndexName(string $model): string
     {
+        if (class_exists($model) && is_subclass_of($model, RedisOM::class)) {
+            $customPrefix = $model::getKeyPrefix();
+            if ($customPrefix !== null) {
+                return rtrim($customPrefix, ':') . ':' . $this->indexSuffix;
+            }
+        }
+
         $prefix = Str::plural(strtolower(class_basename($model)));
         return "{$prefix}:{$this->indexSuffix}";
     }
     
     /**
      * Resolve key prefix for a model.
-     * e.g. User → "users:"
+     * If the model class has a $keyPrefix property, use that.
+     * Otherwise auto-generate: e.g. User → "users:"
      */
     public function resolveKeyPrefix(string $model): string
     {
+        // Check if $model is a FQCN with custom $keyPrefix
+        if (class_exists($model) && is_subclass_of($model, RedisOM::class)) {
+            $custom = $model::getKeyPrefix();
+            if ($custom !== null) {
+                return rtrim($custom, ':') . ':';
+            }
+        }
+
         return Str::plural(strtolower(class_basename($model))) . ':';
     }
 
@@ -50,7 +87,7 @@ class IndexManager
     public function indexExists(string $indexName): bool
     {
         try {
-            $this->redis()->command('FT.INFO', [$indexName]);
+            $this->executeRaw(['FT.INFO', $indexName]);
             return true;
         } catch (\Exception $e) {
             return false;
@@ -63,7 +100,7 @@ class IndexManager
     public function dropIndex(string $indexName): bool
     {
         try {
-            $this->redis()->command('FT.DROPINDEX', [$indexName]);
+            $this->executeRaw(['FT.DROPINDEX', $indexName]);
             return true;
         } catch (\Exception $e) {
             Log::warning("RedisOM dropIndex: could not drop '{$indexName}': " . $e->getMessage());
@@ -187,7 +224,7 @@ class IndexManager
         }
 
         try {
-            $this->redis()->command('FT.CREATE', $args);
+            $this->executeRaw(array_merge(['FT.CREATE'], $args));
             return true;
         } catch (\Exception $e) {
             Log::error("RedisOM createIndex failed for '{$indexName}': " . $e->getMessage());
@@ -201,7 +238,7 @@ class IndexManager
     public function getIndexInfo(string $indexName): array
     {
         try {
-            return $this->redis()->command('FT.INFO', [$indexName]) ?? [];
+            return $this->executeRaw(['FT.INFO', $indexName]) ?? [];
         } catch (\Exception $e) {
             return [];
         }

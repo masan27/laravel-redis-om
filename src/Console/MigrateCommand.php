@@ -4,7 +4,6 @@ namespace Masan27\LaravelRedisOM\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Redis;
-use Illuminate\Support\Facades\Log;
 use Masan27\LaravelRedisOM\IndexManager;
 
 class MigrateCommand extends Command
@@ -28,7 +27,7 @@ class MigrateCommand extends Command
     {
         $force     = $this->option('force');
         $modelArg  = $this->argument('model');
-        $modelPath = config('redis_om.model_path', app_path('Models/Redis'));
+        $modelPath = app_path('Models/RedisOM');
 
         if (!$this->ensureConnection($indexManager)) {
             return;
@@ -39,7 +38,7 @@ class MigrateCommand extends Command
 
         // Resolve which models to migrate
         if ($modelArg) {
-            $models = $this->resolveModelByName($modelArg, $modelPath);
+            $models = $this->resolveModelByName($modelArg, $modelPath, $indexManager);
 
             if (empty($models)) {
                 $this->error("Model '{$modelArg}' not found under {$modelPath}.");
@@ -69,12 +68,12 @@ class MigrateCommand extends Command
                 $result = $indexManager->createIndex($modelClass, $force);
 
                 if ($result === true) {
-                    $indexName = $indexManager->resolveIndexName($modelName);
+                    $indexName = $indexManager->resolveIndexName($modelClass);
                     $this->line("  <fg=green>✓</> <fg=white>{$modelName}</> → <fg=cyan>{$indexName}</>");
                     $created++;
                 } else {
                     // false = already exists and not forced
-                    $indexName = $indexManager->resolveIndexName($modelName);
+                    $indexName = $indexManager->resolveIndexName($modelClass);
                     $this->line("  <fg=yellow>–</> <fg=white>{$modelName}</> → <fg=yellow>already exists, skipped</> (use --force to recreate)");
                     $skipped++;
                 }
@@ -91,7 +90,7 @@ class MigrateCommand extends Command
     /**
      * Try to find a model class by short name (e.g. "User" → "App\Models\Redis\User").
      */
-    protected function resolveModelByName(string $name, string $modelPath): array
+    protected function resolveModelByName(string $name, string $modelPath, IndexManager $indexManager): array
     {
         // Try fully qualified first
         if (class_exists($name)) {
@@ -100,7 +99,7 @@ class MigrateCommand extends Command
 
         // Try common namespaces
         $candidates = [
-            "App\\Models\\Redis\\{$name}",
+            "App\\Models\\RedisOM\\{$name}",
             "App\\Models\\{$name}",
         ];
 
@@ -111,64 +110,51 @@ class MigrateCommand extends Command
         }
 
         // Scan model path
-        $indexManager = app(IndexManager::class);
-        $all          = $indexManager->discoverModels($modelPath);
+        $all = $indexManager->discoverModels($modelPath);
 
         return array_filter($all, fn($class) => class_basename($class) === $name);
     }
     /**
      * Ensure we can connect to Redis, or try fallback host.
      */
-    protected function ensureConnection(IndexManager $indexManager): bool
+     protected function ensureConnection(IndexManager $indexManager): bool
     {
         $connectionName = config('redis_om.connection', 'default');
-        
-        try {
-            // Test connection with a simple command
-            Redis::connection($connectionName)->command('PING');
-            return true;
-        } catch (\Exception $e) {
-            $host = config("database.redis.{$connectionName}.host");
-            $newHost = null;
+        $host = config("database.redis.{$connectionName}.host");
+        $port = config("database.redis.{$connectionName}.port", 6379);
 
-            if ($host === 'localhost' || $host === '127.0.0.1') {
-                $newHost = 'host.docker.internal';
-            } elseif ($host === 'host.docker.internal') {
-                $newHost = '127.0.0.1';
-            }
+        // Coba connect langsung pakai socket, bukan lewat Laravel Redis facade dulu
+        $hosts = [$host];
 
-            if ($newHost) {
-                // Only try fallback if the DNS is resolvable on this system
-                if (gethostbyname($newHost) === $newHost) {
-                     // Not resolvable (gethostbyname returns the host if it fails)
-                     $this->error("Connection to Redis at '{$host}' failed.");
-                     $this->error($e->getMessage());
-                     return false;
+        if ($host === 'localhost' || $host === '127.0.0.1') {
+            $hosts[] = 'host.docker.internal';
+        } elseif ($host === 'host.docker.internal') {
+            $hosts[] = '127.0.0.1';
+        }
+
+        foreach ($hosts as $tryHost) {
+            // Test dulu pakai fsockopen sebelum bikin Redis connection
+            $fp = @fsockopen($tryHost, $port, $errno, $errstr, 2);
+            if ($fp) {
+                fclose($fp);
+
+                if ($tryHost !== $host) {
+                    $this->warn("Host '{$host}:{$port}' unreachable. Using fallback '{$tryHost}:{$port}'.");
+                    config()->set("database.redis.{$connectionName}.host", $tryHost);
+                    Redis::purge($connectionName);
                 }
-
-                $port = config("database.redis.{$connectionName}.port", 6379);
-                $this->warn("Connection to Redis at '{$host}:{$port}' failed. Trying fallback host '{$newHost}:{$port}'...");
-                
-                // Dynamically update config
-                config()->set("database.redis.{$connectionName}.host", $newHost);
-                
-                // Purge instance to force reconnect
-                Redis::purge($connectionName);
 
                 try {
                     Redis::connection($connectionName)->command('PING');
-                    $this->info("Successfully connected to Redis using fallback host '{$newHost}:{$port}'.");
                     return true;
-                } catch (\Exception $e2) {
-                    $this->error("Connection to Redis failed on both '{$host}' and '{$newHost}' port {$port}.");
-                    $this->error($e2->getMessage());
+                } catch (\Exception $e) {
+                    $this->error("Redis PING failed on '{$tryHost}': " . $e->getMessage());
                     return false;
                 }
             }
-
-            $this->error("Connection to Redis at '{$host}' failed.");
-            $this->error($e->getMessage());
-            return false;
         }
+
+        $this->error("Nggak bisa konek ke Redis. Hosts yang dicoba: " . implode(', ', $hosts));
+        return false;
     }
 }

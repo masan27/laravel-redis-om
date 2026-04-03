@@ -30,6 +30,15 @@ class {{ class }} extends RedisOM
     ];
 
     /**
+     * Override Redis key prefix.
+     * Default: auto-generated from class name (e.g., 'users:')
+     * Index name will also be derived from this (e.g., 'users:index')
+     *
+     * @var string|null
+     */
+    // protected ?string $keyPrefix = 'my_prefix:';
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array

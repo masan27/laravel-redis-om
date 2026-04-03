@@ -63,11 +63,29 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     protected array $index = [];
 
     /**
+     * Override Redis key prefix (e.g., 'my_users:').
+     * Default: auto-generated from class name (e.g., 'users:').
+     * Index name will also be derived from this (e.g., 'my_users:index').
+     *
+     * @var string|null
+     */
+    protected ?string $keyPrefix = null;
+
+    /**
      * Get the model name (e.g., 'User').
      */
     public static function getModelName(): string
     {
         return class_basename(static::class);
+    }
+
+    /**
+     * Get the custom key prefix if defined, or null to use auto-generated.
+     */
+    public static function getKeyPrefix(): ?string
+    {
+        $instance = new static();
+        return $instance->keyPrefix;
     }
 
     /**

@@ -35,7 +35,7 @@ class ModelMakeCommand extends Command
         $className = array_pop($parts);
         $subNamespace = !empty($parts) ? '\\' . implode('\\', $parts) : '';
         
-        $path = base_path('app/Models/Redis/' . str_replace('\\', '/', $name) . '.php');
+        $path = base_path('app/Models/RedisOM/' . str_replace('\\', '/', $name) . '.php');
         $directory = dirname($path);
 
         // 2. Create Directory if not exists
@@ -50,9 +50,9 @@ class ModelMakeCommand extends Command
 
         // 3. Prepare Content from Stub
         $stub = File::get(__DIR__ . '/stubs/model.stub');
-        
-        $namespace = 'App\\Models\\Redis' . $subNamespace;
-        
+
+        $namespace = 'App\Models\RedisOM' . $subNamespace;
+
         $content = str_replace(
             ['{{ namespace }}', '{{ class }}'],
             [$namespace, $className],
@@ -62,6 +62,6 @@ class ModelMakeCommand extends Command
         // 4. Save File
         File::put($path, $content);
 
-        $this->info("Redis Model [app/Models/Redis/" . str_replace('\\', '/', $name) . ".php] created successfully.");
+        $this->info("Redis Model [app/Models/RedisOM/" . str_replace('\\', '/', $name) . ".php] created successfully.");
     }
 }
