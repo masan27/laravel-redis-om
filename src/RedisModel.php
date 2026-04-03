@@ -163,12 +163,20 @@ class RedisModel
         $isNumeric = str_starts_with($indexType, 'NUMERIC');
         $isTag     = str_starts_with($indexType, 'TAG');
         $isTagCase = $indexType === 'TAG_CASE';
+        $isDate    = ($indexType === 'DATE' || $indexType === 'DATETIME');
 
-        if ($isTagCase && !is_null($value)) {
+        if (($isTagCase || $isDate) && !is_null($value)) {
             if (is_array($value)) {
-                $value = array_map(fn($v) => strtolower((string) $v), $value);
+                $value = array_map(function($v) use ($isTagCase) {
+                    if ($isTagCase) return strtolower((string) $v);
+                    return $v instanceof \DateTimeInterface ? $v->getTimestamp() : Carbon::parse($v)->timestamp;
+                }, $value);
             } else {
-                $value = strtolower((string) $value);
+                if ($isTagCase) {
+                    $value = strtolower((string) $value);
+                } else {
+                    $value = $value instanceof \DateTimeInterface ? $value->getTimestamp() : Carbon::parse($value)->timestamp;
+                }
             }
         }
 
@@ -504,10 +512,17 @@ class RedisModel
                     unset($record['update_time']);
                     
                     // Normalization
-                    foreach ($indexedFields as $field => $type) {
-                        $type = strtoupper(trim($type));
-                        if ($type === 'TAG_CASE' && isset($record[$field])) {
-                            $record["_ci_{$field}"] = strtolower((string) $record[$field]);
+                    foreach ($indexedFields as $f => $type) {
+                        $type   = strtoupper(trim($type));
+                        $isDate = ($type === 'DATE' || $type === 'DATETIME');
+
+                        if ($type === 'TAG_CASE' && isset($record[$f])) {
+                            $record["_ci_{$f}"] = strtolower((string) $record[$f]);
+                        }
+
+                        if ($isDate && isset($record[$f])) {
+                            $val = $record[$f];
+                            $record["_ts_{$f}"] = $val instanceof \DateTimeInterface ? $val->getTimestamp() : Carbon::parse($val)->timestamp;
                         }
                     }
 
@@ -546,9 +561,16 @@ class RedisModel
                         $pipe->command('JSON.SET', [$key, "$.{$field}", json_encode($val)]);
 
                         // Normalization update if needed
-                        $type = isset($indexedFields[$field]) ? strtoupper(trim($indexedFields[$field])) : null;
+                        $type   = isset($indexedFields[$field]) ? strtoupper(trim($indexedFields[$field])) : null;
+                        $isDate = ($type === 'DATE' || $type === 'DATETIME');
+
                         if ($type === 'TAG_CASE') {
                             $pipe->command('JSON.SET', [$key, "$._ci_{$field}", json_encode(strtolower((string) $val))]);
+                        }
+
+                        if ($isDate) {
+                            $ts = $val instanceof \DateTimeInterface ? $val->getTimestamp() : Carbon::parse($val)->timestamp;
+                            $pipe->command('JSON.SET', [$key, "$._ts_{$field}", json_encode($ts)]);
                         }
                     }
 

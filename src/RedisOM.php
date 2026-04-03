@@ -56,7 +56,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
      * Fields to index in RediSearch.
      * Only fields defined here can be used in where() queries.
      * 
-     * Supported types: TEXT, TEXT SORTABLE, TAG, TAG SORTABLE, NUMERIC, GEO
+     * Supported types: TEXT, TEXT SORTABLE, TAG, TAG SORTABLE, TAG_CASE, DATE, DATETIME, NUMERIC, GEO
      *
      * @var array
      */
@@ -334,11 +334,26 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
         $attributes = $this->attributes;
         $attributes['updated_time'] = Carbon::now()->toIso8601String();
 
-        // Automatic Normalization for TAG_CASE
+        // Automatic Normalization for TAG_CASE and DATE/DATETIME
         foreach ($this->index as $field => $type) {
-            $type = strtoupper(trim($type));
+            $type   = strtoupper(trim($type));
+            $isDate = ($type === 'DATE' || $type === 'DATETIME');
+
             if ($type === 'TAG_CASE' && isset($attributes[$field])) {
                 $attributes["_ci_{$field}"] = strtolower((string) $attributes[$field]);
+            }
+
+            if ($isDate && isset($attributes[$field])) {
+                $val = $attributes[$field];
+                if ($val instanceof \DateTimeInterface) {
+                    $attributes["_ts_{$field}"] = $val->getTimestamp();
+                } else {
+                    try {
+                        $attributes["_ts_{$field}"] = Carbon::parse($val)->timestamp;
+                    } catch (\Exception $e) {
+                        // skip if invalid date
+                    }
+                }
             }
         }
 

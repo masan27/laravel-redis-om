@@ -15,6 +15,8 @@ class {{ class }} extends RedisOM
      *   TEXT SORTABLE   — full-text search + sortable via orderBy()
      *   TAG             — exact match, enum, boolean (supports ==, !=, in, !in)
      *   TAG SORTABLE    — exact match + sortable via orderBy()
+     *   TAG_CASE        — case-insensitive exact match (auto-normalizes to lowercase)
+     *   DATE            — date/datetime, stored as numeric timestamp (supports range queries)
      *   NUMERIC         — number, sortable by default (supports ==, !=, >, <, >=, <=, between)
      *   GEO             — geo coordinates
      *
@@ -22,9 +24,9 @@ class {{ class }} extends RedisOM
      */
     protected array $index = [
         // 'name'       => 'TEXT',
-        // 'email'      => 'TAG',
+        // 'email'      => 'TAG_CASE',
         // 'age'        => 'NUMERIC',
-        // 'is_active'  => 'TAG',
+        // 'created_at' => 'DATE',
     ];
 
     /**

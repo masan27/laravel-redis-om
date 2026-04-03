@@ -113,7 +113,7 @@ class IndexManager
      */
     protected function validateSchema(array $schema, string $modelClass): void
     {
-        $validTypes = ['TEXT', 'TEXT SORTABLE', 'TAG', 'TAG SORTABLE', 'TAG_CASE', 'NUMERIC', 'NUMERIC SORTABLE', 'GEO'];
+        $validTypes = ['TEXT', 'TEXT SORTABLE', 'TAG', 'TAG SORTABLE', 'TAG_CASE', 'DATE', 'DATETIME', 'NUMERIC', 'NUMERIC SORTABLE', 'GEO'];
 
         foreach ($schema as $field => $type) {
             $baseType = strtoupper(trim($type));
@@ -129,7 +129,7 @@ class IndexManager
             if (!$valid) {
                 throw new \Exception(
                     "Invalid index type '{$type}' for field '{$field}' in model '{$modelClass}'. " .
-                    "Valid types: TEXT, TEXT SORTABLE, TAG, TAG SORTABLE, NUMERIC, GEO."
+                    "Valid types: TEXT, TEXT SORTABLE, TAG, TAG SORTABLE, TAG_CASE, DATE, DATETIME, NUMERIC, GEO."
                 );
             }
         }
@@ -167,9 +167,15 @@ class IndexManager
 
         foreach ($schema as $field => $type) {
             $type     = strtoupper(trim($type));
-            $jsonPath = ($type === 'TAG_CASE') ? "$._ci_{$field}" : "$.{$field}";
+            $isDate   = ($type === 'DATE' || $type === 'DATETIME');
+            $jsonPath = ($type === 'TAG_CASE') ? "$._ci_{$field}" : ($isDate ? "$._ts_{$field}" : "$.{$field}");
             $alias    = $field;
-            $typeParts = explode(' ', ($type === 'TAG_CASE') ? 'TAG' : $type);
+            
+            if ($isDate) {
+                $typeParts = ['NUMERIC'];
+            } else {
+                $typeParts = explode(' ', ($type === 'TAG_CASE') ? 'TAG' : $type);
+            }
 
             $args[] = $jsonPath;
             $args[] = 'AS';
