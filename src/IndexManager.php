@@ -26,6 +26,15 @@ class IndexManager
     }
 
     /**
+     * Get the global Redis prefix from connection config.
+     */
+    public function getGlobalPrefix(): string
+    {
+        $opts = config('database.redis.options.prefix', '');
+        return config("database.redis.{$this->connection}.prefix", $opts);
+    }
+
+    /**
      * Execute a raw Redis command, compatible with both Predis and PhpRedis.
      * Needed because command names like 'FT.INFO' contain dots which are not
      * valid PHP method names and break ->command() on some drivers.
@@ -52,15 +61,17 @@ class IndexManager
      */
     public function resolveIndexName(string $model): string
     {
+        $globalPrefix = $this->getGlobalPrefix();
+
         if (class_exists($model) && is_subclass_of($model, RedisOM::class)) {
             $customPrefix = $model::getKeyPrefix();
             if ($customPrefix !== null) {
-                return rtrim($customPrefix, ':') . ':' . $this->indexSuffix;
+                return $globalPrefix . rtrim($customPrefix, ':') . ':' . $this->indexSuffix;
             }
         }
 
         $prefix = Str::plural(strtolower(class_basename($model)));
-        return "{$prefix}:{$this->indexSuffix}";
+        return $globalPrefix . "{$prefix}:{$this->indexSuffix}";
     }
     
     /**
@@ -70,15 +81,17 @@ class IndexManager
      */
     public function resolveKeyPrefix(string $model): string
     {
+        $globalPrefix = $this->getGlobalPrefix();
+
         // Check if $model is a FQCN with custom $keyPrefix
         if (class_exists($model) && is_subclass_of($model, RedisOM::class)) {
             $custom = $model::getKeyPrefix();
             if ($custom !== null) {
-                return rtrim($custom, ':') . ':';
+                return $globalPrefix . rtrim($custom, ':') . ':';
             }
         }
 
-        return Str::plural(strtolower(class_basename($model))) . ':';
+        return $globalPrefix . Str::plural(strtolower(class_basename($model))) . ':';
     }
 
     /**
@@ -158,7 +171,8 @@ class IndexManager
         $idFields = [];
 
         foreach ($schema as $field => $type) {
-            if (strtoupper(trim($type)) === 'ID') {
+            $parts = explode(' ', strtoupper(trim($type)));
+            if (in_array('ID', $parts)) {
                 $idFields[] = $field;
             }
         }
@@ -175,23 +189,24 @@ class IndexManager
      */
     protected function validateSchema(array $schema, string $modelClass): void
     {
-        $validTypes = ['TEXT', 'TEXT SORTABLE', 'TAG', 'TAG SORTABLE', 'TAG_CASE', 'DATE', 'DATETIME', 'NUMERIC', 'NUMERIC SORTABLE', 'GEO', 'ID'];
+        $validSearchTypes = ['TEXT', 'TAG', 'DATE', 'DATETIME', 'NUMERIC', 'GEO', 'TAG_CASE'];
 
         foreach ($schema as $field => $type) {
-            $baseType = strtoupper(trim($type));
-            $valid = false;
+            $parts = explode(' ', strtoupper(trim($type)));
+            $isValid = false;
 
-            foreach ($validTypes as $validType) {
-                if (str_starts_with($baseType, $validType)) {
-                    $valid = true;
+            $isValid = !empty($parts);
+            foreach ($parts as $part) {
+                if (!in_array($part, $validSearchTypes) && $part !== 'ID' && $part !== 'SORTABLE') {
+                    $isValid = false;
                     break;
                 }
             }
 
-            if (!$valid) {
+            if (!$isValid) {
                 throw new \Exception(
                     "Invalid index type '{$type}' for field '{$field}' in model '{$modelClass}'. " .
-                    "Valid types: TEXT, TEXT SORTABLE, TAG, TAG SORTABLE, TAG_CASE, DATE, DATETIME, NUMERIC, GEO."
+                    "Valid types: TEXT, TAG, DATE, DATETIME, NUMERIC, GEO, or ID marker."
                 );
             }
         }
@@ -202,9 +217,8 @@ class IndexManager
      */
     public function createIndex(string $modelClass, bool $force = false): bool
     {
-        $modelName = class_basename($modelClass);
-        $indexName = $this->resolveIndexName($modelName);
-        $keyPrefix = $this->resolveKeyPrefix($modelName);
+        $indexName = $this->resolveIndexName($modelClass);
+        $keyPrefix = $this->resolveKeyPrefix($modelClass);
 
         // Drop first if force
         if ($force && $this->indexExists($indexName)) {
@@ -228,16 +242,29 @@ class IndexManager
         ];
 
         foreach ($schema as $field => $type) {
-            $type     = strtoupper(trim($type));
-            $isDate   = ($type === 'DATE' || $type === 'DATETIME');
-            $jsonPath = ($type === 'TAG_CASE') ? "$._ci_{$field}" : ($isDate ? "$._ts_{$field}" : "$.{$field}");
-            $alias    = $field;
+            $typeParts = explode(' ', strtoupper(trim($type)));
             
-            if ($isDate) {
-                $typeParts = ['NUMERIC'];
-            } else {
-                $typeParts = explode(' ', ($type === 'TAG_CASE') ? 'TAG' : $type);
+            // Detect special handling
+            $isTagCase = in_array('TAG_CASE', $typeParts);
+            $isDate    = in_array('DATE', $typeParts) || in_array('DATETIME', $typeParts);
+            
+            // Remove 'ID' marker from parts sent to Redis
+            $typeParts = array_filter($typeParts, fn($p) => $p !== 'ID');
+            
+            // If it was just 'ID', default to 'TAG'
+            if (empty($typeParts)) {
+                $typeParts = ['TAG'];
             }
+
+            // Map internal types to RediSearch types
+            $typeParts = array_map(function($p) {
+                if ($p === 'DATE' || $p === 'DATETIME') return 'NUMERIC';
+                if ($p === 'TAG_CASE') return 'TAG';
+                return $p;
+            }, $typeParts);
+
+            $jsonPath = $isTagCase ? "$._ci_{$field}" : ($isDate ? "$._ts_{$field}" : "$.{$field}");
+            $alias    = $field;
 
             $args[] = $jsonPath;
             $args[] = 'AS';
@@ -249,6 +276,7 @@ class IndexManager
         }
 
         try {
+            file_put_contents('/tmp/redis_om_args.txt', print_r($args, true));
             $this->executeRaw(array_merge(['FT.CREATE'], $args));
             return true;
         } catch (\Exception $e) {

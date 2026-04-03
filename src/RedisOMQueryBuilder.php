@@ -471,7 +471,7 @@ class RedisOMQueryBuilder
         $success = true;
 
         foreach ($chunks as $chunk) {
-            if (!$this->service->massDelete($this->model, $chunk)) {
+            if (!$this->service->massDelete($this->model, $chunk, $this->modelClass)) {
                 $success = false;
             }
         }

@@ -1,6 +1,6 @@
 {
     "name": "masan27/laravel-redis-om",
-    "version": "2.2.2",
+    "version": "2.2.3",
     "description": "Laravel Redis OM implementation for Laravel with direct RediSearch support",
     "type": "library",
     "license": "proprietary",

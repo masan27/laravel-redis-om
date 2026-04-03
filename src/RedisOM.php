@@ -101,7 +101,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
         }
 
         // Dipanggil dari subclass (Model Style)
-        return app(RedisModel::class)->builder(static::getModelName(), $currentClass);
+        return app(RedisModel::class)->builder(static::class, $currentClass);
     }
 
     /**
@@ -109,9 +109,9 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
      */
     public static function find($id, ?string $modelName = null)
     {
-        $modelNameExplicit = $modelName ?: static::getModelName();
-        $indexManager = app(IndexManager::class);
-        $key = $indexManager->resolveKeyPrefix($modelNameExplicit) . $id;
+        $modelIdentifier = $modelName ?: static::class;
+        $indexManager    = app(IndexManager::class);
+        $key             = $indexManager->resolveKeyPrefix($modelIdentifier) . $id;
 
         /** @var RedisModel $service */
         $service = app(RedisModel::class);
@@ -153,8 +153,8 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
      */
     public static function exists($id, ?string $modelName = null): bool
     {
-        $model = $modelName ?: static::getModelName();
-        $key   = app(IndexManager::class)->resolveKeyPrefix($model) . $id;
+        $modelIdentifier = $modelName ?: static::class;
+        $key             = app(IndexManager::class)->resolveKeyPrefix($modelIdentifier) . $id;
         return app(RedisModel::class)->directExists($key);
     }
 
@@ -363,10 +363,19 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
         $attributes = $this->attributes;
         $attributes['_updated_time'] = Carbon::now()->toIso8601String();
 
-        // Automatic Normalization for TAG_CASE and DATE/DATETIME
+        // Automatic Normalization for TAG_CASE, DATE/DATETIME, and string casting for TAG/TEXT
         foreach ($this->index as $field => $type) {
             $type   = strtoupper(trim($type));
             $isDate = ($type === 'DATE' || $type === 'DATETIME');
+
+            // RediSearch ON JSON requires TAG and TEXT fields to be STRINGS in the JSON document.
+            // If we have numeric IDs or other non-string data, we must cast it.
+            if (isset($attributes[$field]) && !is_array($attributes[$field])) {
+                $typeParts = explode(' ', $type);
+                if (in_array('TAG_CASE', $typeParts) || in_array('TAG', $typeParts) || in_array('TEXT', $typeParts) || in_array('ID', $typeParts)) {
+                    $attributes[$field] = (string) $attributes[$field];
+                }
+            }
 
             if ($type === 'TAG_CASE' && isset($attributes[$field])) {
                 $attributes["_ci_{$field}"] = strtolower((string) $attributes[$field]);
@@ -483,7 +492,9 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     public static function create(array $attributes): self
     {
         $model = new static($attributes);
-        $model->save();
+        if (!$model->save()) {
+            throw new \Exception("Failed to save redis model " . static::class);
+        }
         return $model;
     }
 

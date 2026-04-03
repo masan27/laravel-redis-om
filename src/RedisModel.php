@@ -114,7 +114,7 @@ class RedisModel
 
     /**
      * Get the index type for a specific field.
-     * Returns e.g. "NUMERIC SORTABLE", "TEXT", "TAG", or null if not indexed.
+     * Returns e.g. "NUMERIC", "TEXT", "TAG", or null if not indexed.
      */
     protected function getFieldIndexType(string $field, ?string $modelClass): ?string
     {
@@ -331,7 +331,7 @@ class RedisModel
         ?string $modelClass = null
     ): array {
         try {
-            $indexName   = $this->resolveIndexName($model);
+            $indexName   = $this->resolveIndexName($modelClass ?: $model);
             $queryString = $this->buildFtQuery($filters, $modelClass);
 
             $args = [$indexName, $queryString];
@@ -426,7 +426,7 @@ class RedisModel
 
         // 2. Fallback: plain GET
         try {
-            $plain = $this->redis()->get($key);
+            $plain = $this->executeRaw(['GET', $key]);
             if ($plain === null) {
                 return null;
             }
@@ -453,11 +453,11 @@ class RedisModel
                 $this->executeRaw(['JSON.SET', $key, '$', json_encode($payload)]);
             } else {
                 $stored = is_bool($value) ? (int) $value : $value;
-                $this->redis()->set($key, $stored);
+                $this->executeRaw(['SET', $key, $stored]);
             }
 
             if ($ttl) {
-                $this->redis()->expire($key, $ttl);
+                $this->executeRaw(['EXPIRE', $key, $ttl]);
             }
 
             return true;
@@ -482,7 +482,7 @@ class RedisModel
             )]);
 
             if ($ttl) {
-                $this->redis()->expire($key, $ttl);
+                $this->executeRaw(['EXPIRE', $key, $ttl]);
             }
 
             return true;
@@ -498,7 +498,7 @@ class RedisModel
     public function directDelete(string $key): bool
     {
         try {
-            $this->redis()->del($key);
+            $this->executeRaw(['DEL', $key]);
             return true;
         } catch (\Exception $e) {
             Log::error("RedisOM directDelete Error for key '{$key}': " . $e->getMessage());
@@ -512,7 +512,7 @@ class RedisModel
     public function directExists(string $key): bool
     {
         try {
-            return (bool) $this->redis()->exists($key);
+            return (bool) $this->executeRaw(['EXISTS', $key]);
         } catch (\Exception $e) {
             return false;
         }
@@ -528,7 +528,7 @@ class RedisModel
 
             $idField = $modelClass ? app(IndexManager::class)->getPrimaryKeyField($modelClass) : null;
 
-            $this->redis()->pipeline(function ($pipe) use ($model, $records, $ttl, $indexedFields, $idField) {
+            $this->redis()->pipeline(function ($pipe) use ($model, $records, $ttl, $indexedFields, $idField, $modelClass) {
                 $now = Carbon::now()->toIso8601String();
 
                 foreach ($records as $record) {
@@ -539,13 +539,21 @@ class RedisModel
                         $record[$idField ?: 'id'] = $id;
                     }
 
-                    $key = app(IndexManager::class)->resolveKeyPrefix($model) . $id;
+                    $key = app(IndexManager::class)->resolveKeyPrefix($modelClass ?: $model) . $id;
                     unset($record['_updated_time'], $record['updated_time'], $record['update_time']);
                     
-                    // Normalization
+                    // Normalization and string casting
                     foreach ($indexedFields as $f => $type) {
                         $type   = strtoupper(trim($type));
                         $isDate = ($type === 'DATE' || $type === 'DATETIME');
+
+                        // RediSearch ON JSON requires TAG and TEXT fields to be STRINGS in the JSON document.
+                        if (isset($record[$f]) && !is_array($record[$f])) {
+                            $typeParts = explode(' ', $type);
+                            if (in_array('TAG_CASE', $typeParts) || in_array('TAG', $typeParts) || in_array('TEXT', $typeParts) || in_array('ID', $typeParts)) {
+                                $record[$f] = (string) $record[$f];
+                            }
+                        }
 
                         if ($type === 'TAG_CASE' && isset($record[$f])) {
                             $record["_ci_{$f}"] = strtolower((string) $record[$f]);
@@ -562,7 +570,7 @@ class RedisModel
                     $pipe->rawCommand('JSON.SET', $key, '$', json_encode($payload));
 
                     if ($ttl) {
-                        $pipe->expire($key, $ttl);
+                        $pipe->rawCommand('EXPIRE', $key, $ttl);
                     }
                 }
             });
@@ -582,11 +590,11 @@ class RedisModel
         try {
             $indexedFields = $this->getIndexedFields($modelClass);
 
-            $this->redis()->pipeline(function ($pipe) use ($model, $ids, $fields, $indexedFields) {
+            $this->redis()->pipeline(function ($pipe) use ($model, $ids, $fields, $indexedFields, $modelClass) {
                 $now = Carbon::now()->toIso8601String();
 
                 foreach ($ids as $id) {
-                    $key = app(IndexManager::class)->resolveKeyPrefix($model) . $id;
+                    $key = app(IndexManager::class)->resolveKeyPrefix($modelClass ?: $model) . $id;
 
                     foreach ($fields as $field => $val) {
                         $pipe->rawCommand('JSON.SET', $key, "$.{$field}", json_encode($val));
@@ -619,13 +627,13 @@ class RedisModel
     /**
      * Mass delete via pipeline.
      */
-    public function massDelete(string $model, array $ids): bool
+    public function massDelete(string $model, array $ids, ?string $modelClass = null): bool
     {
         try {
-            $this->redis()->pipeline(function ($pipe) use ($model, $ids) {
+            $this->redis()->pipeline(function ($pipe) use ($model, $ids, $modelClass) {
                 foreach ($ids as $id) {
-                    $key = app(IndexManager::class)->resolveKeyPrefix($model) . $id;
-                    $pipe->del($key);
+                    $key = app(IndexManager::class)->resolveKeyPrefix($modelClass ?: $model) . $id;
+                    $pipe->rawCommand('DEL', $key);
                 }
             });
 
