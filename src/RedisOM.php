@@ -343,7 +343,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     /**
      * Save to Redis using JSON.SET.
      */
-    public function save(): bool
+    public function save(?int $ttl = null): bool
     {
         /** @var RedisModel $service */
         $service = app(RedisModel::class);
@@ -395,7 +395,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
             }
         }
 
-        $success = $service->directSet($this->getFullKey(), $attributes);
+        $success = $service->directSet($this->getFullKey(), $attributes, $ttl);
 
         if ($success) {
             $this->syncOriginal();
@@ -415,7 +415,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     /**
      * Update the model with attributes and save.
      */
-    public function updateModel(array $attributes = []): bool
+    public function updateModel(array $attributes = [], ?int $ttl = null): bool
     {
         $idField = app(IndexManager::class)->getPrimaryKeyField(static::class);
         $id      = $idField ? $this->getAttribute($idField) : ($this->getAttribute('id') ?? $this->getAttribute('pk'));
@@ -424,7 +424,7 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
             return false;
         }
 
-        return $this->fill($attributes)->save();
+        return $this->fill($attributes)->save($ttl);
     }
 
     /**
@@ -489,10 +489,10 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     /**
      * Static create.
      */
-    public static function create(array $attributes): self
+    public static function create(array $attributes, ?int $ttl = null): self
     {
         $model = new static($attributes);
-        if (!$model->save()) {
+        if (!$model->save($ttl)) {
             throw new \Exception("Failed to save redis model " . static::class);
         }
         return $model;
