@@ -6,7 +6,7 @@ A high-performance **Pure PHP** Redis Object Mapper (OM) for Laravel, powered by
 
 - **Direct Redis Access**: Performance-critical operations (`find`, `save`, `update`, `delete`) interact directly with Redis using `JSON.GET/SET`.
 - **Search & Pagination**: Full support for RediSearch filtering, sorting, and various pagination styles.
-- **Transaction Support**: Group multiple operations like [`begin`,`commit`,`rollback`].
+- **Transaction Support**: Group multiple operations like (`begin`,`commit`,`rollback`).
 - **Atomic Updates**: Partial updates are performed atomically using RedisJSON paths.
 - **Eager Loading**: Supports record relationships (`hasOne`, `hasMany`) and eager loading with `with()`.
 
