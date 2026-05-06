@@ -11,6 +11,8 @@ class RedisModel
 {
     protected array $relations = [];
     protected string $connection;
+    protected bool $loggingQueries = false;
+    protected array $queryLog = [];
 
     public function __construct()
     {
@@ -318,6 +320,48 @@ class RedisModel
     }
 
     /**
+     * Prepare FT.SEARCH arguments from filters.
+     */
+    public function prepareFtSearchArgs(
+        string $model,
+        array $filters = [],
+        ?int $limit = null,
+        ?int $offset = null,
+        ?string $sortBy = null,
+        bool $sortAsc = true,
+        ?array $fields = null,
+        ?string $modelClass = null
+    ): array {
+        $indexName   = $this->resolveIndexName($modelClass ?: $model);
+        $queryString = $this->buildFtQuery($filters, $modelClass);
+
+        $args = [$indexName, $queryString];
+
+        // RETURN specific fields
+        if ($fields) {
+            $args[] = 'RETURN';
+            $args[] = count($fields);
+            foreach ($fields as $f) {
+                $args[] = $f;
+            }
+        }
+
+        // SORTBY
+        if ($sortBy) {
+            $args[] = 'SORTBY';
+            $args[] = $sortBy;
+            $args[] = $sortAsc ? 'ASC' : 'DESC';
+        }
+
+        // LIMIT
+        $args[] = 'LIMIT';
+        $args[] = $offset ?? 0;
+        $args[] = $limit ?? 10;
+
+        return $args;
+    }
+
+    /**
      * Execute FT.SEARCH directly against Redis.
      */
     public function rawQuery(
@@ -331,31 +375,9 @@ class RedisModel
         ?string $modelClass = null
     ): array {
         try {
-            $indexName   = $this->resolveIndexName($modelClass ?: $model);
-            $queryString = $this->buildFtQuery($filters, $modelClass);
-
-            $args = [$indexName, $queryString];
-
-            // RETURN specific fields
-            if ($fields) {
-                $args[] = 'RETURN';
-                $args[] = count($fields);
-                foreach ($fields as $f) {
-                    $args[] = $f;
-                }
-            }
-
-            // SORTBY
-            if ($sortBy) {
-                $args[] = 'SORTBY';
-                $args[] = $sortBy;
-                $args[] = $sortAsc ? 'ASC' : 'DESC';
-            }
-
-            // LIMIT
-            $args[] = 'LIMIT';
-            $args[] = $offset ?? 0;
-            $args[] = $limit ?? 10;
+            $args = $this->prepareFtSearchArgs(
+                $model, $filters, $limit, $offset, $sortBy, $sortAsc, $fields, $modelClass
+            );
 
             $raw    = $this->executeRaw(array_merge(['FT.SEARCH'], $args));
             $result = $this->parseFtSearchResult($raw);
@@ -396,17 +418,32 @@ class RedisModel
      */
     protected function executeRaw(array $args): mixed
     {
-        $client = $this->redis()->client();
+        $startTime = microtime(true);
+        $client    = $this->redis()->client();
 
         // Duck typing: Predis has executeRaw(), PhpRedis has rawCommand()
         // Avoids instanceof \Predis\Client which requires Predis to be installed.
         if (method_exists($client, 'executeRaw')) {
-            return $client->executeRaw($args);
+            $result = $client->executeRaw($args);
+        } else {
+            // PhpRedis
+            $cmd = array_shift($args);
+            $result = $client->rawCommand($cmd, ...$args);
+            // Put command back for logging
+            array_unshift($args, $cmd);
         }
 
-        // PhpRedis
-        $cmd = array_shift($args);
-        return $client->rawCommand($cmd, ...$args);
+        if ($this->loggingQueries) {
+            $this->queryLog[] = [
+                'query'      => implode(' ', array_map(function($arg) {
+                    return (str_contains((string)$arg, ' ') || $arg === '') ? "\"$arg\"" : $arg;
+                }, $args)),
+                'time'       => round((microtime(true) - $startTime) * 1000, 2),
+                'connection' => $this->connection,
+            ];
+        }
+
+        return $result;
     }
 
     /**
@@ -674,5 +711,45 @@ class RedisModel
     public function rollBack(): void
     {
         $this->redis()->discard();
+    }
+
+    /**
+     * Enable the query log.
+     */
+    public function enableQueryLog(): void
+    {
+        $this->loggingQueries = true;
+    }
+
+    /**
+     * Disable the query log.
+     */
+    public function disableQueryLog(): void
+    {
+        $this->loggingQueries = false;
+    }
+
+    /**
+     * Flush the query log.
+     */
+    public function flushQueryLog(): void
+    {
+        $this->queryLog = [];
+    }
+
+    /**
+     * Get the connection's query log.
+     */
+    public function getQueryLog(): array
+    {
+        return $this->queryLog;
+    }
+
+    /**
+     * Determine whether we're logging queries.
+     */
+    public function logging(): bool
+    {
+        return $this->loggingQueries;
     }
 }
