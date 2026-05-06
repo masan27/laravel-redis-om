@@ -164,7 +164,7 @@ class RedisModel
     {
         $indexType = $typeOverride ? strtoupper($typeOverride) : ($this->getFieldIndexType($field, $modelClass) ?? 'TEXT');
         $isNumeric = str_starts_with($indexType, 'NUMERIC');
-        $isTag     = str_starts_with($indexType, 'TAG');
+        $isTag     = str_starts_with($indexType, 'TAG') || $indexType === 'ID';
         $isTagCase = $indexType === 'TAG_CASE';
         $isDate    = ($indexType === 'DATE' || $indexType === 'DATETIME');
 
@@ -265,7 +265,7 @@ class RedisModel
 
         $indexType = strtoupper(trim($indexType));
         $isNumeric = str_starts_with($indexType, 'NUMERIC');
-        $isTag     = str_starts_with($indexType, 'TAG');
+        $isTag     = str_starts_with($indexType, 'TAG') || $indexType === 'ID';
         $isText    = str_starts_with($indexType, 'TEXT');
         $isDate    = ($indexType === 'DATE' || $indexType === 'DATETIME');
 
