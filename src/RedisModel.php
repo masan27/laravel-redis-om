@@ -151,7 +151,7 @@ class RedisModel
                 }
             }
 
-            $parts[] = $this->buildCondition($field, $op, $value, $modelClass);
+            $parts[] = $this->buildCondition($field, $op, $value, $modelClass, $filter['type'] ?? null);
         }
 
         return implode(' ', $parts);
@@ -160,27 +160,20 @@ class RedisModel
     /**
      * Build a single FT.SEARCH condition.
      */
-    protected function buildCondition(string $field, string $op, mixed $value, ?string $modelClass = null): string
+    protected function buildCondition(string $field, string $op, mixed $value, ?string $modelClass = null, ?string $typeOverride = null): string
     {
-        $indexType = $this->getFieldIndexType($field, $modelClass) ?? 'TEXT';
+        $indexType = $typeOverride ? strtoupper($typeOverride) : ($this->getFieldIndexType($field, $modelClass) ?? 'TEXT');
         $isNumeric = str_starts_with($indexType, 'NUMERIC');
         $isTag     = str_starts_with($indexType, 'TAG');
         $isTagCase = $indexType === 'TAG_CASE';
         $isDate    = ($indexType === 'DATE' || $indexType === 'DATETIME');
 
-        if (($isTagCase || $isDate) && !is_null($value)) {
-            if (is_array($value)) {
-                $value = array_map(function($v) use ($isTagCase) {
-                    if ($isTagCase) return strtolower((string) $v);
-                    return $v instanceof \DateTimeInterface ? $v->getTimestamp() : Carbon::parse($v)->timestamp;
-                }, $value);
-            } else {
-                if ($isTagCase) {
-                    $value = strtolower((string) $value);
-                } else {
-                    $value = $value instanceof \DateTimeInterface ? $value->getTimestamp() : Carbon::parse($value)->timestamp;
-                }
-            }
+        if (is_array($value)) {
+            $value = array_map(function($v) use ($indexType, $isTagCase, $isDate) {
+                return $this->normalizeValueForIndex($v, $indexType);
+            }, $value);
+        } else {
+            $value = $this->normalizeValueForIndex($value, $indexType);
         }
 
         switch ($op) {
@@ -259,6 +252,45 @@ class RedisModel
             default:
                 throw new \Exception("Operator '{$op}' is not supported.");
         }
+    }
+
+    /**
+     * Normalize a value based on the index type.
+     */
+    protected function normalizeValueForIndex(mixed $value, string $indexType): mixed
+    {
+        if (is_null($value)) {
+            return null;
+        }
+
+        $indexType = strtoupper(trim($indexType));
+        $isNumeric = str_starts_with($indexType, 'NUMERIC');
+        $isTag     = str_starts_with($indexType, 'TAG');
+        $isText    = str_starts_with($indexType, 'TEXT');
+        $isDate    = ($indexType === 'DATE' || $indexType === 'DATETIME');
+
+        if ($isNumeric) {
+            if (is_bool($value)) {
+                return $value ? 1 : 0;
+            }
+            return $value;
+        }
+
+        if ($isTag || $isText || $indexType === 'TAG_CASE') {
+            if (is_bool($value)) {
+                return $value ? "1" : "0";
+            }
+            if ($indexType === 'TAG_CASE') {
+                return strtolower((string) $value);
+            }
+            return (string) $value;
+        }
+
+        if ($isDate) {
+            return $value instanceof \DateTimeInterface ? $value->getTimestamp() : Carbon::parse($value)->timestamp;
+        }
+
+        return $value;
     }
 
     /**
@@ -585,10 +617,15 @@ class RedisModel
                         $isDate = ($type === 'DATE' || $type === 'DATETIME');
 
                         // RediSearch ON JSON requires TAG and TEXT fields to be STRINGS in the JSON document.
-                        if (isset($record[$f]) && !is_array($record[$f])) {
-                            $typeParts = explode(' ', $type);
-                            if (in_array('TAG_CASE', $typeParts) || in_array('TAG', $typeParts) || in_array('TEXT', $typeParts) || in_array('ID', $typeParts)) {
-                                $record[$f] = (string) $record[$f];
+                        if (isset($record[$f])) {
+                            $val = $record[$f];
+                            
+                            if (is_bool($val)) {
+                                $record[$f] = $val ? ($isNumeric ? 1 : "1") : ($isNumeric ? 0 : "0");
+                            } elseif ($isNumeric) {
+                                $record[$f] = $val;
+                            } elseif (!is_array($val)) {
+                                $record[$f] = (string) $val;
                             }
                         }
 
@@ -598,7 +635,7 @@ class RedisModel
 
                         if ($isDate && isset($record[$f])) {
                             $val = $record[$f];
-                            $record["_ts_{$f}"] = $val instanceof \DateTimeInterface ? $val->getTimestamp() : Carbon::parse($val)->timestamp;
+                            $record["_ts_{$f}"] = $this->normalizeValueForIndex($val, 'DATE');
                         }
                     }
 
@@ -645,7 +682,7 @@ class RedisModel
                         }
 
                         if ($isDate) {
-                            $ts = $val instanceof \DateTimeInterface ? $val->getTimestamp() : Carbon::parse($val)->timestamp;
+                            $ts = $this->normalizeValueForIndex($val, 'DATE');
                             $pipe->rawCommand('JSON.SET', $key, "$._ts_{$field}", json_encode($ts));
                         }
                     }

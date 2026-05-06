@@ -30,7 +30,7 @@ class RedisOMQueryBuilder
     /**
      * Add a where clause to the query.
      */
-    public function where(string $field, $operator = null, $value = null): self
+    public function where(string $field, $operator = null, $value = null, string $type = null): self
     {
         if (func_num_args() === 2) {
             $value    = $operator;
@@ -41,18 +41,27 @@ class RedisOMQueryBuilder
             'field' => $field,
             'op'    => $operator,
             'value' => $value,
+            'type'  => $type,
         ];
 
         return $this;
     }
 
     /**
+     * Add a where clause with explicit type.
+     */
+    public function whereType(string $field, $operator, $value, string $type): self
+    {
+        return $this->where($field, $operator, $value, $type);
+    }
+
+    /**
      * Add a case-insensitive where clause.
      * Note: Field must be indexed as 'TAG_CASE' for this to be effective.
      */
-    public function whereInsensitive(string $field, $value): self
+    public function whereInsensitive(string $field, $value, string $type = null): self
     {
-        return $this->where($field, '=', $value);
+        return $this->where($field, '=', $value, $type);
     }
 
     /**
@@ -76,28 +85,44 @@ class RedisOMQueryBuilder
     /**
      * Add a whereIn clause.
      */
-    public function whereIn(string $field, array $values): self
+    public function whereIn(string $field, array $values, string $type = null): self
     {
-        $this->filters[] = ['field' => $field, 'op' => 'in', 'value' => $values];
+        $this->filters[] = ['field' => $field, 'op' => 'in', 'value' => $values, 'type' => $type];
         return $this;
+    }
+
+    /**
+     * Add a whereIn clause with explicit type.
+     */
+    public function whereInType(string $field, array $values, string $type): self
+    {
+        return $this->whereIn($field, $values, $type);
     }
 
     /**
      * Add a whereBetween clause.
      */
-    public function whereBetween(string $field, array $values): self
+    public function whereBetween(string $field, array $values, string $type = null): self
     {
-        $this->filters[] = ['field' => $field, 'op' => 'between', 'value' => $values];
+        $this->filters[] = ['field' => $field, 'op' => 'between', 'value' => $values, 'type' => $type];
         return $this;
+    }
+
+    /**
+     * Add a whereBetween clause with explicit type.
+     */
+    public function whereBetweenType(string $field, array $values, string $type): self
+    {
+        return $this->whereBetween($field, $values, $type);
     }
 
 
     /**
      * Add a whereStartsWith clause.
      */
-    public function whereStartsWith(string $field, string $value): self
+    public function whereStartsWith(string $field, string $value, string $type = null): self
     {
-        return $this->where($field, 'startswith', $value);
+        return $this->where($field, 'startswith', $value, $type);
     }
 
 
