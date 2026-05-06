@@ -112,6 +112,55 @@ $users = User::query()
 $paginated = User::query()->paginate(15);
 ```
 
+## Debugging & Query Logging
+
+### Query Log
+You can enable the query log to capture all raw Redis commands executed during a request. This is useful for debugging and performance profiling.
+
+```php
+use Masan27\LaravelRedisOM\RedisOM;
+
+// Enable logging
+RedisOM::enableQueryLog();
+
+// Run some queries
+$user = User::find(1);
+$activeUsers = User::where('status', 'active')->get();
+
+// Get the log
+$logs = RedisOM::getQueryLog();
+/*
+[
+    [
+        'query'      => 'JSON.GET users:1',
+        'time'       => 0.45, // in milliseconds
+        'connection' => 'default'
+    ],
+    [
+        'query'      => 'FT.SEARCH users:index "@status:{active}" LIMIT 0 10',
+        'time'       => 1.2,
+        'connection' => 'default'
+    ]
+]
+*/
+
+// Clear the log
+RedisOM::flushQueryLog();
+
+// Disable logging
+RedisOM::disableQueryLog();
+```
+
+### Raw Query Preview
+If you want to see the `FT.SEARCH` command that will be executed by the query builder without actually running it:
+
+```php
+$query = User::where('status', 'active')->where('age', '>', 20);
+
+echo $query->getRawQuery();
+// Output: FT.SEARCH users:index "@status:{active} @age:[(20 +inf]" LIMIT 0 10
+```
+
 ## Documentation & Examples
 
 Detailed usage examples:

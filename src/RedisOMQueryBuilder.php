@@ -494,4 +494,27 @@ class RedisOMQueryBuilder
     {
         return $this->limit(1)->get()->first();
     }
+
+    /**
+     * Get the raw Redis command for the query.
+     */
+    public function getRawQuery(): string
+    {
+        $args = $this->service->prepareFtSearchArgs(
+            $this->model,
+            $this->filters,
+            $this->limit,
+            $this->offset,
+            $this->sortBy,
+            $this->sortAsc,
+            $this->fields,
+            $this->modelClass
+        );
+
+        array_unshift($args, 'FT.SEARCH');
+
+        return implode(' ', array_map(function ($arg) {
+            return (str_contains((string)$arg, ' ') || $arg === '') ? "\"$arg\"" : $arg;
+        }, $args));
+    }
 }

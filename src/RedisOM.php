@@ -532,6 +532,38 @@ abstract class RedisOM implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
+     * Enable the query log.
+     */
+    public static function enableQueryLog(): void
+    {
+        app(RedisModel::class)->enableQueryLog();
+    }
+
+    /**
+     * Disable the query log.
+     */
+    public static function disableQueryLog(): void
+    {
+        app(RedisModel::class)->disableQueryLog();
+    }
+
+    /**
+     * Flush the query log.
+     */
+    public static function flushQueryLog(): void
+    {
+        app(RedisModel::class)->flushQueryLog();
+    }
+
+    /**
+     * Get the connection's query log.
+     */
+    public static function getQueryLog(): array
+    {
+        return app(RedisModel::class)->getQueryLog();
+    }
+
+    /**
      * Forward static calls to query builder.
      */
     public static function __callStatic($method, $parameters)
